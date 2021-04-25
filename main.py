@@ -4,12 +4,12 @@ from excel_to_data_set import DataSetGenerator
 
 def main():
 
+    df = pd.read_excel(r'/Users/regevazran/Desktop/technion/semester i/project c/temp.xlsx',engine ='openpyxl')
 
-    df = pd.ExcelFile(r'/Users/regevazran/Desktop/technion/semester i/project c/AWHA1 features.xls')
-    file = open(df,'r')
-    lines = file.readlines()
-    for line in lines :
-        print(line)
+    print(df.to_string())
+
+
+
 
     return
     data_set = None
