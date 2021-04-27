@@ -6,11 +6,11 @@ def main():
     data_generator = DataSetGenerator()
     data_generator.get_new_data_to_enter()
     data_generator.get_mice_name_list()
-    print(f"Hope to make you proud!!\nData frame is:\n{data_generator.new_data_to_enter}\nMice names are:\n{data_generator.mice_names}")
 
     for mouse in data_generator.mice_names:
         data_generator.enter_new_mouse(mouse_name=mouse,exp_name='exp1')
 
     print(data_generator.dataset.to_string())
+    data_generator.dataset.to_csv("wound_measurement_dataset.csv")
 if __name__ == '__main__':
     main()
