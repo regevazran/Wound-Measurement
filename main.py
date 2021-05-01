@@ -1,16 +1,16 @@
-from generate_data_frame import DataSetGenerator
+import generate_data_frame
+from mice_algo_cv import mice_algo_cv_master
 
-# TODO: Regev, try to give datasetgenerator wrong path and see what happens.
-# TODO: also, try to give it the right path. and try not give path at all. IT ALL WORKS! :)
+
 def main():
-    data_generator = DataSetGenerator()
-    data_generator.get_new_data_to_enter()
-    data_generator.get_mice_name_list()
 
-    for mouse in data_generator.mice_names:
-        data_generator.enter_new_mouse(mouse_name=mouse,exp_name='exp1')
+    generate_data_frame.prepare_dataset()
 
-    print(data_generator.dataset.to_string())
-    data_generator.dataset.to_csv("wound_measurement_dataset.csv")
+    mice_algo = mice_algo_cv_master()
+    mice_algo.initialize_pictures_from_csv()
+    mice_algo.do_something_with_pictures()
+    mice_algo.post_process_pictures_data()
+
+
 if __name__ == '__main__':
     main()
