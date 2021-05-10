@@ -6,7 +6,7 @@ from PIL import Image
 
 sheet_names = ['Contraction', 'Scab', 'Wound close', 'Size by pixels', 'Absolute size']
 columns_names = ['contraction', 'scab', 'wound_close', 'size_in_pixels', 'size_in_cm', 'pictures']
-csv_path = "wound_measurement_dataset.csv"
+
 
 class Picture:
     def __init__(self):
@@ -20,21 +20,22 @@ class Picture:
         self.pictures = []
 
 
-class DataSetGenerator:
+class DataSet:
     def __init__(self, path=None):
         self.excel_path = path if path is not None else filedialog.askopenfilename(filetypes=[("Excel files", ".xlsx .xls .csv")])
         self.new_data_to_enter = None
         self.mice_names = []
-
-        self.dataset = None
+        self.data = None
         self.create_new_dataset()
 
+    def update_dataset(self):
+        pass
     def create_new_dataset(self):
         columns = ['Mouse']
         for column in columns_names:
             for i in range(11):
                 columns.append(str(column) + '_day' + str(i))
-        self.dataset = pd.DataFrame(columns=columns)
+        self.data = pd.DataFrame(columns=columns)
 
     def get_new_data_to_enter(self):
         try:
@@ -127,44 +128,46 @@ class DataSetGenerator:
         size_in_pixels = filtered_df[filtered_df['group'].str.contains('Size by pixels')].drop(['group', 'Mice'], axis='columns')
         size_in_cm = filtered_df[filtered_df['group'].str.contains('Absolute size')].drop(['group', 'Mice'], axis='columns')
         pictures = filtered_df[filtered_df['group'].str.contains('pictures')].drop(['group', 'Mice'], axis='columns')
-        self.dataset = self.dataset.append({'Mouse': full_name}, ignore_index=True)
-        mouse_index = self.dataset[self.dataset['Mouse'] == full_name].index.to_numpy()[0]
+        self.data = self.data.append({'Mouse': full_name}, ignore_index=True)
+        mouse_index = self.data[self.data['Mouse'] == full_name].index.to_numpy()[0]
 
         # enter mouse values to dataset
         for day in contraction.columns:
             day_num = day.split()[1]
             if contraction.empty is not True:
-                self.dataset.at[mouse_index, 'contraction_day'+day_num] = contraction.iloc[0][day]
+                self.data.at[mouse_index, 'contraction_day' + day_num] = contraction.iloc[0][day]
             if scab.empty is not True:
-                self.dataset.at[mouse_index, 'scab_day'+day_num] = scab.iloc[0][day]
+                self.data.at[mouse_index, 'scab_day' + day_num] = scab.iloc[0][day]
             if wound_close.empty is not True:
-                self.dataset.at[mouse_index, 'wound_close_day'+day_num] = wound_close.iloc[0][day]
+                self.data.at[mouse_index, 'wound_close_day' + day_num] = wound_close.iloc[0][day]
             if size_in_pixels.empty is not True:
-                self.dataset.at[mouse_index, 'size_in_pixels_day'+day_num] = size_in_pixels.iloc[0][day]
+                self.data.at[mouse_index, 'size_in_pixels_day' + day_num] = size_in_pixels.iloc[0][day]
             if size_in_cm.empty is not True:
-                self.dataset.at[mouse_index, 'size_in_cm_day'+day_num] = size_in_cm.iloc[0][day]
+                self.data.at[mouse_index, 'size_in_cm_day' + day_num] = size_in_cm.iloc[0][day]
             if pictures.empty is not True:
-                self.dataset.at[mouse_index, 'pictures_day'+day_num] = pictures.iloc[0][day]
+                self.data.at[mouse_index, 'pictures_day' + day_num] = pictures.iloc[0][day]
 
     def get_pic_with_tag(self, mouse_name, day):
         pic = Picture()
         day = str(day)
-        mouse_index = self.dataset[self.dataset['Mouse'] == mouse_name].index.to_numpy()[0]
+        mouse_index = self.data[self.data['Mouse'] == mouse_name].index.to_numpy()[0]
         pic.mouse_name = mouse_name
         pic.day = day
-        pic.scab = self.dataset.at[mouse_index, 'scab_day'+day]
-        pic.contraction = self.dataset.at[mouse_index, 'contraction_day'+day]
-        pic.size_in_pixels = self.dataset.at[mouse_index, 'size_in_pixels_day'+day]
-        pic.size_in_cm = self.dataset.at[mouse_index, 'size_in_cm_day'+day]
-        pic.wound_close = self.dataset.at[mouse_index, 'wound_close_day'+day]
-        pic.pictures = self.dataset.at[mouse_index, 'pictures_day'+day]
-
+        pic.scab = self.data.at[mouse_index, 'scab_day' + day]
+        pic.contraction = self.data.at[mouse_index, 'contraction_day' + day]
+        pic.size_in_pixels = self.data.at[mouse_index, 'size_in_pixels_day' + day]
+        pic.size_in_cm = self.data.at[mouse_index, 'size_in_cm_day' + day]
+        pic.wound_close = self.data.at[mouse_index, 'wound_close_day' + day]
+        pic.pictures = self.data.at[mouse_index, 'pictures_day' + day]
         return pic
 
-def prepare_dataset(data_generator):
+
+def prepare_dataset():
+    data_generator = DataSet()
     data_generator.get_new_data_to_enter()
     data_generator.get_mice_name_list()
     data_generator.add_mice()
-    print(data_generator.dataset.to_string())                 # FIXME delete
-    data_generator.dataset.at[0,'pictures_day0'][0].show()    # show picture example form the data set FIXME delete
+    return data_generator
+    # print(data_generator.dataset.to_string())                 # FIXME delete
+    # data_generator.dataset.at[0,'pictures_day0'][0].show()    # show picture example form the data set FIXME delete
     # data_generator.dataset.to_csv(csv_path)

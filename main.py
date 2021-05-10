@@ -1,21 +1,14 @@
-import generate_data_frame
-from mice_algo_cv import mice_algo_cv_master
+from generate_data_frame import prepare_dataset
+from image_processing import image_process_algo_master
+
+csv_path = "wound_measurement_dataset.csv"
 
 
 def main():
-    data_generator = generate_data_frame.DataSetGenerator()
-    generate_data_frame.prepare_dataset(data_generator)
-    mice_names = data_generator.dataset['Mouse']
-    print(mice_names[0])
-    pics = generate_data_frame.DataSetGenerator.get_pic_with_tag(data_generator, mouse_name=mice_names[0],day= 0)
-    pics.pictures[5].show()
+    dataset = prepare_dataset()
 
-
-    # mice_algo = mice_algo_cv_master()
-    # mice_algo.initialize_pictures_from_csv()
-    # mice_algo.do_something_with_pictures()
-    # mice_algo.post_process_pictures_data()
-
+    image_process_algo = image_process_algo_master(dataset)
+    image_process_algo.start()
 
 
 if __name__ == '__main__':
