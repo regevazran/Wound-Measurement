@@ -1,9 +1,23 @@
 import pandas as pd
 from tkinter import filedialog
+import ntpath
+import os
+from PIL import Image
 
 sheet_names = ['Contraction', 'Scab', 'Wound close', 'Size by pixels', 'Absolute size']
 columns_names = ['contraction', 'scab', 'wound_close', 'size_in_pixels', 'size_in_cm', 'pictures']
 csv_path = "wound_measurement_dataset.csv"
+
+class Picture:
+    def __init__(self):
+        self.mouse_name = None
+        self.day = None
+        self.contraction = None
+        self.scab = None
+        self.size_in_pixels = None
+        self.size_in_cm = None
+        self.wound_close = None
+        self.pictures = []
 
 
 class DataSetGenerator:
@@ -21,24 +35,6 @@ class DataSetGenerator:
             for i in range(11):
                 columns.append(str(column) + '_day' + str(i))
         self.dataset = pd.DataFrame(columns=columns)
-        # pd.DataFrame(columns=['Mouse', 'contraction_day0', 'contraction_day1', 'contraction_day2', 'contraction_day3',
-        #                       'contraction_day4', 'contraction_day5', 'contraction_day6', 'contraction_day7',
-        #                       'contraction_day8', 'contraction_day9', 'contraction_day10', \
-        #                       'scab_day0', 'scab_day1', 'scab_day2', 'scab_day3', 'scab_day4', 'scab_day5', 'scab_day6',
-        #                       'scab_day7', 'scab_day8', 'scab_day9', 'scab_day10', \
-        #                       'wound_close_day0', 'wound_close_day1', 'wound_close_day2', 'wound_close_day3',
-        #                       'wound_close_day4', 'wound_close_day5', 'wound_close_day6', 'wound_close_day7',
-        #                       'wound_close_day8', 'wound_close_day9', 'wound_close_day10', \
-        #                       'size_in_pixels_day0', 'size_in_pixels_day1', 'size_in_pixels_day2',
-        #                       'size_in_pixels_day3', 'size_in_pixels_day4', 'size_in_pixels_day5',
-        #                       'size_in_pixels_day6', 'size_in_pixels_day7', 'size_in_pixels_day8',
-        #                       'size_in_pixels_day9', 'size_in_pixels_day10', \
-        #                       'size_in_cm_day0', 'size_in_cm_day1', 'size_in_cm_day2', 'size_in_cm_day3',
-        #                       'size_in_cm_day4', 'size_in_cm_day5', 'size_in_cm_day6', 'size_in_cm_day7',
-        #                       'size_in_cm_day8', 'size_in_cm_day9', 'size_in_cm_day10', \
-        #                       'pictures_day0', 'pictures_day1', 'pictures_day2', 'pictures_day3', 'pictures_day4',
-        #                       'pictures_day5', 'pictures_day6', 'pictures_day7', 'pictures_day8', 'pictures_day9',
-        #                       'pictures_day10'])
 
     def get_new_data_to_enter(self):
         try:
@@ -63,8 +59,8 @@ class DataSetGenerator:
             # concatenate data sheets into one dataframe
             stack_df = pd.concat(dataframes_from_excel)
             stack_df = stack_df.reset_index(drop=True)
-            stack_df.dropna(axis=['columns', 'index'])
-            # stack_df.dropna(axis='index')
+            stack_df.dropna(axis='columns')
+            stack_df.dropna(axis='index')
 
             # check if all columns have valid names
             for col in stack_df.columns:
@@ -72,6 +68,33 @@ class DataSetGenerator:
                     col = col.split()
                     if col[0] != 'Day' or not 0 <= int(col[1]) <= 10:
                         print("incorrect columns name in excel sheets:", col, "is not a valid column")
+
+
+            # extract pictures from directory tree
+            mice_list = stack_df['Mice'].unique()
+            mice_pictures = pd.DataFrame(columns=stack_df.columns)
+            dir_root = ntpath.dirname(self.excel_path)
+            mice_dir_list = next(os.walk(dir_root))[1]
+
+            for mouse in mice_dir_list:
+                mouse_name = ''.join(mouse.split(sep="-"))
+                if mouse_name not in mice_list:
+                    print("mouse name: ", mouse," is not in excel file") # check mouse in directory tree match mice in excel
+                    break
+                mice_pictures = mice_pictures.append({'group':'pictures','Mice': mouse_name}, ignore_index=True)
+                mouse_index = mice_pictures[mice_pictures['Mice'] == mouse_name].index.to_numpy()[0]
+
+                for (root, dirs, files) in os.walk(dir_root+'/'+mouse):
+                    day_num = ntpath.split(root)[1].split()
+                    if day_num[0].lower() != 'day': continue # go over only directories of days
+                    image_list = []
+                    for image in files: image_list.append(Image.open(root +'/'+image))
+                    mice_pictures.at[mouse_index, 'Day ' + day_num[1]] = image_list
+
+            stack_df = stack_df.append(mice_pictures)
+            stack_df = stack_df.reset_index(drop=True)
+            stack_df.dropna(axis='columns')
+            stack_df.dropna(axis='index')
 
             self.new_data_to_enter = stack_df
 
@@ -103,6 +126,7 @@ class DataSetGenerator:
         wound_close = filtered_df[filtered_df['group'].str.contains('Wound close')].drop(['group', 'Mice'], axis='columns')
         size_in_pixels = filtered_df[filtered_df['group'].str.contains('Size by pixels')].drop(['group', 'Mice'], axis='columns')
         size_in_cm = filtered_df[filtered_df['group'].str.contains('Absolute size')].drop(['group', 'Mice'], axis='columns')
+        pictures = filtered_df[filtered_df['group'].str.contains('pictures')].drop(['group', 'Mice'], axis='columns')
         self.dataset = self.dataset.append({'Mouse': full_name}, ignore_index=True)
         mouse_index = self.dataset[self.dataset['Mouse'] == full_name].index.to_numpy()[0]
 
@@ -119,12 +143,28 @@ class DataSetGenerator:
                 self.dataset.at[mouse_index, 'size_in_pixels_day'+day_num] = size_in_pixels.iloc[0][day]
             if size_in_cm.empty is not True:
                 self.dataset.at[mouse_index, 'size_in_cm_day'+day_num] = size_in_cm.iloc[0][day]
+            if pictures.empty is not True:
+                self.dataset.at[mouse_index, 'pictures_day'+day_num] = pictures.iloc[0][day]
 
+    def get_pic_with_tag(self, mouse_name, day):
+        pic = Picture()
+        day = str(day)
+        mouse_index = self.dataset[self.dataset['Mouse'] == mouse_name].index.to_numpy()[0]
+        pic.mouse_name = mouse_name
+        pic.day = day
+        pic.scab = self.dataset.at[mouse_index, 'scab_day'+day]
+        pic.contraction = self.dataset.at[mouse_index, 'contraction_day'+day]
+        pic.size_in_pixels = self.dataset.at[mouse_index, 'size_in_pixels_day'+day]
+        pic.size_in_cm = self.dataset.at[mouse_index, 'size_in_cm_day'+day]
+        pic.wound_close = self.dataset.at[mouse_index, 'wound_close_day'+day]
+        pic.pictures = self.dataset.at[mouse_index, 'pictures_day'+day]
 
-def prepare_dataset():
-    data_generator = DataSetGenerator()
+        return pic
+
+def prepare_dataset(data_generator):
     data_generator.get_new_data_to_enter()
     data_generator.get_mice_name_list()
     data_generator.add_mice()
-    # print(data_generator.dataset.to_string())
+    print(data_generator.dataset.to_string())                 # FIXME delete
+    data_generator.dataset.at[0,'pictures_day0'][0].show()    # show picture example form the data set FIXME delete
     # data_generator.dataset.to_csv(csv_path)
