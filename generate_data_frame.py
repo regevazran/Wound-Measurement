@@ -89,7 +89,9 @@ class DataSet:
                     day_num = ntpath.split(root)[1].split()
                     if day_num[0].lower() != 'day': continue # go over only directories of days
                     image_list = []
-                    for image in files: image_list.append(Image.open(root +'/'+image))
+                    for image in files:
+                        if not image.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')): continue
+                        image_list.append(Image.open(root +'/'+image))
                     mice_pictures.at[mouse_index, 'Day ' + day_num[1]] = image_list
 
             stack_df = stack_df.append(mice_pictures)
@@ -163,7 +165,7 @@ class DataSet:
 
 
 def prepare_dataset():
-    data_generator = DataSet()
+    data_generator = DataSet(path="/Users/regevazran/Desktop/technion/semester i/project c/data/mouse batches/AWHA-1/AWHA-1.xlsx")  # FIXME Tomer i changed the path and the name of the exel file from example_exp to AWHA-1
     data_generator.get_new_data_to_enter()
     data_generator.get_mice_name_list()
     data_generator.add_mice()
