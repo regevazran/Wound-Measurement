@@ -290,16 +290,15 @@ class image_process_algo_master:
         self.only_wound = None
 
     def get_rectangle(self):
-        wound_rect = yolo_demo(self.cur_frame)
-        self.wound_rect = [[wound_rect[0][0] / self.cur_frame.shape[0], wound_rect[0][1] / self.cur_frame.shape[1]],
-                           [wound_rect[1][0] / self.cur_frame.shape[0], wound_rect[1][1] / self.cur_frame.shape[1]]]
+        self.wound_rect = yolo_demo(self.cur_frame)
+
 
     def preprocess_frame(self):
         self.cur_frame = np.array(self.cur_frame)
         self.cur_frame = cv2.cvtColor(self.cur_frame, cv2.COLOR_BGR2RGB)
 
     def get_wound_segmentation(self, frame=None):
-        path = ""
+        path = "/Users/regevazran/Desktop/technion/semester i/project c/temp pic/mouse1.jpg"
         frame = cv2.imread(path)
         self.cur_frame = frame
         self.get_rectangle()

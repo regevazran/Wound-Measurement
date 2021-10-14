@@ -146,26 +146,26 @@ import matplotlib.patches as patches
 
 def grab_cut(img, rect):
     # cut a square from the picture around the relevant area
-    img = img[-100 + rect[1]:150 + rect[1] + rect[3], -100 + rect[0]:150 + rect[0] + rect[2]]
-    rect = [100,100,rect[2],rect[3]]
+
+    img = img[-150 + rect[0][1]:140 + rect[1][1], -200 + rect[0][0]:230 + rect[1][0]]
+    # img = cv2.GaussianBlur(img, (9, 9), 0)
+    rect = [(120,120),(img.shape[1]-120,img.shape[0]-120)]
+    rect_for_grab_cut = [120,120,rect[1][0],rect[1][1]]
 
     img_original = img.copy()
+
     # set mask for the grabCut to update
     mask = np.zeros(img.shape[:2],np.uint8)
     bgdModel = np.zeros((1,65),np.float64)
     fgdModel = np.zeros((1,65),np.float64)
 
     # use grabCut to mask the background from the segmented objects
-    cv2.grabCut(img,mask,rect,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_RECT)
+    cv2.grabCut(img,mask,rect_for_grab_cut,bgdModel,fgdModel,5,cv2.GC_INIT_WITH_RECT)
     mask2 = np.where((mask==2)|(mask==0),0,1).astype('uint8')
     img = img*mask2[:,:,np.newaxis]
 
-    p0 = (rect[0],rect[1])
-    p1 = (rect[0]+rect[2],rect[1])
-    p2 = (rect[0]+rect[2],rect[1]+rect[3])
-    p3 = (rect[0],rect[1]+rect[3])
-    contours = [np.array([p0,p1,p2,p3], dtype=np.int32)]
-    cv2.drawContours(img, contours, -1, (0, 0, 255), 2)
+    # contours = [np.array([p0,p1,p2,p3], dtype=np.int32)]
+    # cv2.rectangle(img_original, rect[0], rect[1], (255, 0, 255), 2)
 
     cv2.imshow("original",img_original)
     cv2.waitKey(1)
