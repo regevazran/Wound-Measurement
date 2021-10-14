@@ -165,6 +165,7 @@ class DataSet:
 
 
 def prepare_dataset():
+
     data_generator = DataSet(path="/Users/regevazran/Desktop/technion/semester i/project c/data/mouse batches/AWHA-1/AWHA-1.xlsx")  # FIXME Tomer i changed the path and the name of the exel file from example_exp to AWHA-1
     data_generator.get_new_data_to_enter()
     data_generator.get_mice_name_list()

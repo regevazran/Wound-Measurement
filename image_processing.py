@@ -4,7 +4,7 @@ from scipy.spatial import distance
 from sklearn.feature_extraction import image
 from sklearn.cluster import spectral_clustering
 from yolo.yolo_demo import *
-
+from find_wound import grab_cut
 import pixellib
 
 
@@ -12,9 +12,9 @@ class image_process_algo_master:
     def __init__(self, dataset):
         self.dataset = dataset
         self.picture_list = []
+        self.cur_frame = None
 
-    def get_frames_from_dataset(self,day=0):
-
+    def get_frames_from_dataset(self, day=0):
         self.picture_list = self.dataset.get_pic_with_tag(mouse_name=self.dataset.data["Mouse"][0], day=day).pictures
 
     def pic2HSV(self, pic):
@@ -210,11 +210,8 @@ class image_process_algo_master:
         # cv2.waitKey(0)
         return cropped
 
-
     def get_wound_size(self, preprocess_pic):
         pass
-
-# FIXME delete !!!
 
     def get_histogram(self, image):
         """
@@ -269,24 +266,42 @@ class image_process_algo_master:
         # cv2.imshow('equalized_img', equalized_img)
         # key = cv2.waitKey(0)
         return equalized_img
-    def start(self):
-        for day in range(0,10):
-            self.get_frames_from_dataset(day)
-            print("day:",day) # FIXME delete
-            if type(self.picture_list) != list: continue
-            for pic in self.picture_list:
-                # preprocess_pic = self.preprocess_pic(pic)
-                # pic = self.histogram_equalization(pic)
-                # hsv_pic = self.pic2HSV(preprocess_pic)
-                # self.get_histogram(pic) #FIXME delete
 
-                #yolo test
-                pic = np.array(pic)
-                pic = cv2.cvtColor(pic, cv2.COLOR_BGR2RGB)
-                yolo_demo(pic)
+    # def start(self):
+    #     for day in range(0, 10):
+    #         self.get_frames_from_dataset(day)
+    #         print("day:", day)  # FIXME delete
+    #         if type(self.picture_list) != list: continue
+    #         for pic in self.picture_list:
+    #             pic = np.array(pic)
+    #             pic = cv2.cvtColor(pic, cv2.COLOR_BGR2RGB)
+    #             yolo_demo(pic)
+    #
+    #             key = cv2.waitKey(0)
+    #             if key == ord('q'):
+    #                 break
+    #         print("end of loop")
 
-                key = cv2.waitKey(0)
-                if key == ord('q'):
-                    break
-            print("end of loop")
+    def segment_wound(self):
+        grab_cut(self.cur_frame, self.wound_rect)
 
+    def cut_frame_by_wound(self):
+        # cut cur frame by wound rect
+        self.only_wound = None
+
+    def get_rectangle(self):
+        wound_rect = yolo_demo(self.cur_frame)
+        self.wound_rect = [[wound_rect[0][0] / self.cur_frame.shape[0], wound_rect[0][1] / self.cur_frame.shape[1]],
+                           [wound_rect[1][0] / self.cur_frame.shape[0], wound_rect[1][1] / self.cur_frame.shape[1]]]
+
+    def preprocess_frame(self):
+        self.cur_frame = np.array(self.cur_frame)
+        self.cur_frame = cv2.cvtColor(self.cur_frame, cv2.COLOR_BGR2RGB)
+
+    def get_wound_segmentation(self, frame=None):
+        path = ""
+        frame = cv2.imread(path)
+        self.cur_frame = frame
+        self.get_rectangle()
+        self.cut_frame_by_wound()
+        self.segment_wound()

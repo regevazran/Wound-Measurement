@@ -143,6 +143,7 @@ def chan_vese(image):
 
 # segmenting mouse wound using grabCut
 import matplotlib.patches as patches
+
 def grab_cut(img, rect):
     # cut a square from the picture around the relevant area
     img = img[-100 + rect[1]:150 + rect[1] + rect[3], -100 + rect[0]:150 + rect[0] + rect[2]]
