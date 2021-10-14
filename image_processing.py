@@ -3,6 +3,8 @@ import numpy as np
 from scipy.spatial import distance
 from sklearn.feature_extraction import image
 from sklearn.cluster import spectral_clustering
+from yolo.yolo_demo import *
+
 import pixellib
 
 
@@ -273,10 +275,16 @@ class image_process_algo_master:
             print("day:",day) # FIXME delete
             if type(self.picture_list) != list: continue
             for pic in self.picture_list:
-                preprocess_pic = self.preprocess_pic(pic)
-                # # pic = self.histogram_equalization(pic)
-                hsv_pic = self.pic2HSV(preprocess_pic)
+                # preprocess_pic = self.preprocess_pic(pic)
+                # pic = self.histogram_equalization(pic)
+                # hsv_pic = self.pic2HSV(preprocess_pic)
                 # self.get_histogram(pic) #FIXME delete
+
+                #yolo test
+                pic = np.array(pic)
+                pic = cv2.cvtColor(pic, cv2.COLOR_BGR2RGB)
+                yolo_demo(pic)
+
                 key = cv2.waitKey(0)
                 if key == ord('q'):
                     break
