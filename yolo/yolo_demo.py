@@ -54,9 +54,10 @@ def findObjects(outputs, img):
     return [[x, y], [x+w, y+h]]
 
 
-def yolo_demo(img):
+def yolo_demo(img_original):
     # get image form web camera
     # success, img = cap.read()
+    img = img_original.copy()
 
     # convert imgae to blob (format for the YOLO net)
     blob = cv2.dnn.blobFromImage(img, 1/255, (whT, whT), [0, 0, 0], 1, crop=False)
