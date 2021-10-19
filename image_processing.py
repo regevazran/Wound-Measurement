@@ -162,7 +162,7 @@ class image_process_algo_master:
         return
 
     def deep_segmentation(self,pic):
-        path = '/Users/regevazran/Desktop/technion/semester i/project c/temp pic/'
+        path = '/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/'
         result = cv2.imwrite(path+'temp_pic.jpg', pic)
         from pixellib.semantic import semantic_segmentation
 
@@ -283,11 +283,29 @@ class image_process_algo_master:
     #         print("end of loop")
 
     def segment_wound(self):
-        grab_cut(self.cur_frame, self.wound_rect)
+        kernel = np.ones((5, 5), np.uint8)
+        start_p = 0.2
+        and_p = 1-start_p
+        closing = cv2.morphologyEx(self.only_wound, cv2.MORPH_CLOSE, kernel, iterations=2)
+        self.rect_for_grab_cut = [(int(self.only_wound.shape[1]*start_p),int(self.only_wound.shape[0]*start_p)),(int(self.only_wound.shape[1]*and_p),int(self.only_wound.shape[0]*and_p))]
+
+        img_grab_cut = grab_cut(closing, self.rect_for_grab_cut)
+        cv2.imshow("img_grab_cut", img_grab_cut)
+        cv2.waitKey(0)
 
     def cut_frame_by_wound(self):
-        # cut cur frame by wound rect
-        self.only_wound = None
+        # cut current frame by wound rect
+        bg_percent = 0.5
+        old_rect_width = self.wound_rect[1][0]-self.wound_rect[0][0]
+        old_rect_hight = self.wound_rect[1][1]-self.wound_rect[0][1]
+        new_rect_size = max(old_rect_width,old_rect_hight)
+        rect_center = (self.wound_rect[0][0]+int(old_rect_width/2),self.wound_rect[0][1]+int(old_rect_hight/2))
+        new_rect = [[rect_center[0] - int(new_rect_size/2),rect_center[1]- int(new_rect_size/2)],[rect_center[0] + int(new_rect_size/2),rect_center[1] + int(new_rect_size/2)]]
+        self.wound_rect = new_rect
+        bg_pixel_to_add = int(bg_percent*new_rect_size)
+        print(new_rect_size)
+        print(bg_pixel_to_add)
+        self.only_wound = self.cur_frame[-bg_pixel_to_add + new_rect[0][1]:new_rect[1][1] + bg_pixel_to_add, -bg_pixel_to_add + new_rect[0][0]:new_rect[1][0] + bg_pixel_to_add]
 
     def get_rectangle(self):
         self.wound_rect = yolo_demo(self.cur_frame)
@@ -298,7 +316,7 @@ class image_process_algo_master:
         self.cur_frame = cv2.cvtColor(self.cur_frame, cv2.COLOR_BGR2RGB)
 
     def get_wound_segmentation(self, frame=None):
-        path = "/Users/regevazran/Desktop/technion/semester i/project c/temp pic/mouse1.jpg"
+        path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/mouse1.jpg"
         frame = cv2.imread(path)
         self.cur_frame = frame
         self.get_rectangle()

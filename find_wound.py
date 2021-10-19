@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 from skimage.filters import gaussian
 from skimage.segmentation import active_contour
+from PIL import Image
+
 
 import matplotlib.pyplot as plt
 from skimage import data
@@ -14,16 +16,16 @@ coordinates3 = [0.435547, 0.490126, 0.132378, 0.052734]
 coordinates4 = [0.638563, 0.494792, 0.056641, 0.151910]
 coordinates5 = [0.667101, 0.531467, 0.065104, 0.127170]
 coordinates6 = [0.496094, 0.420573, 0.098090, 0.027344]
-mouse_path1 = "/Users/regevazran/Desktop/technion/semester i/project c/temp pic/mouse1.jpg"
-mouse_path2 = "/Users/regevazran/Desktop/technion/semester i/project c/temp pic/mouse2.jpg"
-mouse_path3 = "/Users/regevazran/Desktop/technion/semester i/project c/temp pic/mouse3.jpg"
-mouse_path4 = "/Users/regevazran/Desktop/technion/semester i/project c/temp pic/mouse4.jpg"
-mouse_path5 = "/Users/regevazran/Desktop/technion/semester i/project c/temp pic/mouse5.jpg"
-mouse_path6 = "/Users/regevazran/Desktop/technion/semester i/project c/temp pic/mouse6.jpg"
+mouse_path1 = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/mouse1.jpg"
+mouse_path2 = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/mouse2.jpg"
+mouse_path3 = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/mouse3.jpg"
+mouse_path4 = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/mouse4.jpg"
+mouse_path5 = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/mouse5.jpg"
+mouse_path6 = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/mouse6.jpg"
 
 
-mouse_path = mouse_path6
-coordinates = coordinates6
+mouse_path = mouse_path3
+coordinates = coordinates3
 
 def get_rect(mouse_img):
     shape = mouse_img.shape
@@ -147,10 +149,13 @@ import matplotlib.patches as patches
 def grab_cut(img, rect):
     # cut a square from the picture around the relevant area
 
-    img = img[-150 + rect[0][1]:140 + rect[1][1], -200 + rect[0][0]:230 + rect[1][0]]
+    # img = img[-50 + rect[1]:100 + rect[1] + rect[3], -50 + rect[0]:100 + rect[0] + rect[2]]
+    # img = img[-150 + rect[0][1]:140 + rect[1][1], -200 + rect[0][0]:230 + rect[1][0]]
+
     # img = cv2.GaussianBlur(img, (9, 9), 0)
-    rect = [(120,120),(img.shape[1]-120,img.shape[0]-120)]
-    rect_for_grab_cut = [120,120,rect[1][0],rect[1][1]]
+    # rect = [(120,120),(img.shape[1]-120,img.shape[0]-120)]
+
+    rect_for_grab_cut = [rect[0][0],rect[0][1],rect[1][0],rect[1][1]]
 
     img_original = img.copy()
 
@@ -165,25 +170,55 @@ def grab_cut(img, rect):
     img = img*mask2[:,:,np.newaxis]
 
     # contours = [np.array([p0,p1,p2,p3], dtype=np.int32)]
-    # cv2.rectangle(img_original, rect[0], rect[1], (255, 0, 255), 2)
-
-    cv2.imshow("original",img_original)
-    cv2.waitKey(1)
-    cv2.imshow("grab cut",img)
+    cv2.rectangle(img_original, rect[0], rect[1], (255, 0, 255), 2)
+    cv2.imshow("img with rect",img_original)
     cv2.waitKey(0)
+
     return  img
+
+def preprocess_wound(img_original):
+    # Read the image and perfrom an OTSU threshold
+    img = img_original.copy()
+    kernel = np.ones((3, 3), np.uint8)
+
+    # Perform closing to remove hair and blur the image
+    closing = cv2.morphologyEx(img, cv2.MORPH_CLOSE, kernel, iterations=2)
+    blur = cv2.blur(closing, (15, 15))
+
+    # Binarize the image
+    gray = cv2.cvtColor(blur, cv2.COLOR_BGR2GRAY)
+    _, thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    cv2.imshow("img",img)
+    cv2.imshow("closing", closing)
+    cv2.imshow("blur", blur)
+    cv2.imshow("thresh", thresh)
+    return img
 
 if __name__ == '__main__':
     # Get Wound
     mouse_original = cv2.imread(mouse_path)
     rect = get_rect(mouse_original)
-    only_wound_original = mouse_original[-50 + rect[1]:100 + rect[1] + rect[3], -50 + rect[0]:100 + rect[0] + rect[2]]
-
+    only_wound_original = mouse_original[-100 + rect[1]:150 + rect[1] + rect[3], -100 + rect[0]:150 + rect[0] + rect[2]]
+    rect = [(100,100),(only_wound_original.shape[1]-100,only_wound_original.shape[0]-100)]
     # Semantic segmentation pascalvoc model
     # pascalvoc_model()
-
+    # preprocess img
+    # only_wound_preprocess = preprocess_wound(only_wound_original)
     # grab cat
-    img_grab_cut = grab_cut(mouse_original, rect)
+    img_grab_cut = grab_cut(only_wound_original, rect)
+
+    # Perform closing to remove hair and blur the image
+    kernel = np.ones((5, 5), np.uint8)
+    closing = cv2.morphologyEx(only_wound_original, cv2.MORPH_CLOSE, kernel, iterations=2)
+    img_grab_cut2 = grab_cut(closing, rect)
+
+    cv2.imshow("img_grab_cut",img_grab_cut)
+    cv2.waitKey(1)
+    cv2.imshow("grab img_grab_cut2",img_grab_cut2)
+    cv2.waitKey(0)
+
+
+
     # only_wound_grab_cut = img_grab_cut[-50 + rect[1]:100 + rect[1] + rect[3], -50 + rect[0]:100 + rect[0] + rect[2]]
 
     # Semantic segmentation snake (active contour) algorithm
