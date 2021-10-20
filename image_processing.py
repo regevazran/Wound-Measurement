@@ -1,10 +1,13 @@
+import math
+
 import cv2
 import numpy as np
 from scipy.spatial import distance
 from sklearn.feature_extraction import image
 from sklearn.cluster import spectral_clustering
 from yolo.yolo_demo import *
-from find_wound import grab_cut
+from find_wound_playGround import canny_with_trackbar
+
 import pixellib
 
 
@@ -14,57 +17,34 @@ class image_process_algo_master:
         self.picture_list = []
         self.cur_frame = None
 
+    # ----------------------not in use------------------------ #
     def get_frames_from_dataset(self, day=0):
         self.picture_list = self.dataset.get_pic_with_tag(mouse_name=self.dataset.data["Mouse"][0], day=day).pictures
+    def start(self):
+        for day in range(0, 10):
+            self.get_frames_from_dataset(day)
+            print("day:", day)
+            if type(self.picture_list) != list: continue
+            for pic in self.picture_list:
+                pic = np.array(pic)
+                pic = cv2.cvtColor(pic, cv2.COLOR_BGR2RGB)
+                yolo_demo(pic)
 
-    def pic2HSV(self, pic):
-        pic = np.array(pic) # FIXME check if needed
-        pic = cv2.resize(pic, (int(pic.shape[1]*0.4), int(pic.shape[0]*0.4))) # FIXME check if needed
-        hsv_frame = cv2.cvtColor(pic, cv2.COLOR_BGR2HSV)
-        pic_rgb = cv2.cvtColor(pic, cv2.COLOR_BGR2RGB)
-        # min_H = hsv_frame[..., 0].min()
-        # min_S = hsv_frame[..., 1].min()
-        # min_V = hsv_frame[..., 2].min()
-        #
-        # max_H = hsv_frame[..., 0].max()
-        # max_S = hsv_frame[..., 1].max()
-        # max_V = hsv_frame[..., 2].max()
-        # print("min max values are: (",min_H, max_H,",",min_S, max_S,",",min_V, max_V,")")
-        # define range of red color in HSV
-        # lower_red = np.array([115, 42, 55])
-        # upper_red = np.array([155, 170, 188])
-        lower_red = np.array([107, 14, 36])
-        upper_red = np.array([150, 153, 171])
-        # Threshold the HSV image to get only blue colors
-        mask = cv2.inRange(hsv_frame, lower_red, upper_red)
-        cv2.imshow("mask",mask)
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
-        close = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel,iterations=5)
-        # open = cv2.morphologyEx(close, cv2.MORPH_OPEN, kernel,iterations=5)
+                key = cv2.waitKey(0)
+                if key == ord('q'):
+                    break
+            print("end of loop")
+    # ----------------------not in use------------------------ #
 
-        # Bitwise-AND mask and original image
-        thresh_pic = cv2.bitwise_and(pic_rgb, pic_rgb, mask=close)
-        cv2.imshow("pic_rgb",pic_rgb)
-        cv2.imshow("thresh_pic",thresh_pic)
-
-        s = np.linspace(0, 2 * np.pi, 400)
-        r = 100 + 100 * np.sin(s)
-        c = 220 + 100 * np.cos(s)
-        init = np.array([r, c]).T
-        print(init.shape)
-        print(init)
-        return hsv_frame
-
-    def find_center_contour(self, contours, pic):
+    def find_center_contour(self, contours):    # function gets contour list and return the center contour out of the biggest three in the list
 
         # take only the mouse contour
-        contours.sort(reverse= True,key = cv2.contourArea)
+        contours.sort(reverse=True, key=cv2.contourArea)
         biggest_three = []
 
         # find center of image
-        image_center = np.asarray(pic.shape) / 2
-        image_center = tuple(image_center.astype('int32'))
-        for i in range(0,2):
+        image_center = (int(self.only_wound.shape[0]/2),int(self.only_wound.shape[1]/2))
+        for i in range(0, 2):
             if (i < len(contours)):
                 # find center of each contour
                 C = cv2.moments(contours[i])
@@ -74,246 +54,112 @@ class image_process_algo_master:
                 contour_center = (center_X, center_Y)
 
                 # calculate distance to image_center
-                distances_to_center = (distance.euclidean(image_center[0:2], contour_center))
+                distances_to_center = (distance.euclidean(image_center, contour_center))
 
                 # save to a list of dictionaries
                 biggest_three.append({'contour': contours[i], 'distance_to_center': distances_to_center})
         # sort the contours
         sorted_biggest_three = sorted(biggest_three, key=lambda i: i['distance_to_center'])
         return sorted_biggest_three[0]['contour']
-    def get_contours(self, pic):
-        blur = cv2.GaussianBlur(pic, (5, 5), 0)
-        _, thresh_pic = cv2.threshold(blur, 80, 255, cv2.THRESH_BINARY_INV)
-        # cv2.imshow("thresh", thresh_pic)
-        contours, _ = cv2.findContours(thresh_pic, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        return contours
-    def cut_mouse(self,pic):
-        # find mouse contour
-        gray_pic = cv2.cvtColor(pic, cv2.COLOR_BGR2GRAY)
-        orig_contours = self.get_contours(gray_pic)
-        center_contour = []
-        center_contour.append(self.find_center_contour(contours=orig_contours, pic= pic))
 
-        # cut out the mouse
-        pic_copy = pic.copy()
-        cv2.drawContours(pic_copy, center_contour, -1, (0, 255, 0), thickness=-1)
-        mask = (pic_copy == (0,255,0))
-        pic_copy = pic*mask
-        gray_pic = cv2.cvtColor(pic_copy, cv2.COLOR_BGR2GRAY)
-        gray_pic[np.where((gray_pic > 0))] = 255
+    def make_rect_for_grabCut(self,start_p):
+        end_p = 1-start_p
+        self.rect_for_grab_cut = [(int(self.only_wound.shape[1]*start_p),int(self.only_wound.shape[0]*start_p)),(int(self.only_wound.shape[1]*end_p),int(self.only_wound.shape[0]*end_p))]
 
-        #close the contour of the mouse
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
-        close = cv2.morphologyEx(gray_pic, cv2.MORPH_CLOSE, kernel,iterations=5)
-        mouse_contours, _ = cv2.findContours(close, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        pic_copy = pic.copy()
-        cv2.drawContours(pic_copy, mouse_contours, -1, (0, 255, 0), thickness=-1)
-        mask = (pic_copy == (0,255,0))
-        pic_copy = pic*mask
+    def create_circular_mask(self,h, w, center=None, radius=None):
 
-        # # cut a rectangle around the mouse
-        # x, y, w, h = cv2.boundingRect(contour[0])
-        # pic_copy = pic.copy()
-        # pic_copy[0:y,:] = (255,255,255)
-        # pic_copy[:,0:x] = (255,255,255)
-        # pic_copy[y+h:pic_copy.shape[0],:] = (255,255,255)
-        # pic_copy[:,x + w: pic_copy.shape[1]] = (255,255,255)
-        return pic_copy
+        if center is None:  # use the middle of the image
+            center = (int(w / 2), int(h / 2))
+        if radius is None:  # use the smallest distance between the center and image walls
+            radius = min(center[0], center[1], w - center[0], h - center[1])
 
-    def kmeans_clostoring(self,pic):
+        Y, X = np.ogrid[:h, :w]
+        dist_from_center = np.sqrt((X - center[0]) ** 2 + (Y - center[1]) ** 2)
 
-        Z = pic.reshape((-1, 3))
-        # convert to np.float32
-        Z = np.float32(Z)
-        # define criteria, number of clusters(K) and apply kmeans()
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0)
-        K = 5
-        ret, label, center = cv2.kmeans(Z, K, None, criteria, 10, cv2.KMEANS_RANDOM_CENTERS)
-        # Now convert back into uint8, and make original image
-        center = np.uint8(center)
-        res = center[label.flatten()]
-        res2 = res.reshape((pic.shape))
-        cv2.imshow('res2', res2)
-        cv2.waitKey(0)
+        mask = dist_from_center <= radius
+        return mask
 
-    def spectral_clustering(self, img):
-        mask = img.astype(bool)
-        img = img.astype(float)
+    def grab_cut(self,img,mode="mask"):
+        # translate rectangle for grab cut demand
+        rect = self.rect_for_grab_cut
+        rect_for_grab_cut = [rect[0][0], rect[0][1], rect[1][0], rect[1][1]]
 
-        img += 1 + 0.2 * np.random.randn(*img.shape)
-        print("start image to graph")
+        img_before_segment = img.copy()
+        mask = None
+        if mode == "rect":
+            mode = cv2.GC_INIT_WITH_RECT
+            # set mask for the grabCut to update
+            mask = np.zeros(img.shape[:2],np.uint8)
+            # draw mask on original img
+            cv2.rectangle(img_before_segment, rect[0], rect[1], (255, 0, 255), 2)
+        else:
+            mode = cv2.GC_INIT_WITH_MASK
+            # create circular mask
+            radius = (self.wound_rect[1][0]-self.wound_rect[0][0])/math.sqrt(2)
+            mask = self.create_circular_mask(img.shape[0], img.shape[1], center=None, radius=radius)
+            mask = np.where(mask == False, 0, 1).astype('uint8')
+            # draw mask on original img
+            img_before_segment = cv2.bitwise_and(img_before_segment,img_before_segment,mask = mask)
+            # set init values for grab cut mask
+            mask[mask > 0] = cv2.GC_PR_FGD
+            mask[mask == 0] = cv2.GC_BGD
 
-        graph = image.img_to_graph(img, mask=mask)
-        print("finished image to graph")
+        bgdModel = np.zeros((1, 65), np.float64)
+        fgdModel = np.zeros((1, 65), np.float64)
+        # use grabCut to mask the background from the segmented objects
+        cv2.grabCut(img, mask, rect_for_grab_cut, bgdModel, fgdModel, 100, mode)
+        mask2 = np.where((mask == 2) | (mask == 0), 0, 1).astype('uint8')
+        img = img * mask2[:, :, np.newaxis]
 
-        graph.data = np.exp(-graph.data / graph.data.std())
-        print("start spectral_cluster")
 
-        labels = spectral_clustering(graph, n_clusters=2, eigen_solver='arpack')
-        print("finished spectral_cluster")
+        return img, img_before_segment, mask2
 
-        label_im = np.full(mask.shape, -1.)
-        label_im[mask] = labels
-
-        cv2.imshow("img", img)
-        cv2.imshow("label_im", label_im)
-        cv2.waitKey(0)
-
-        return
-
-    def deep_segmentation(self,pic):
-        path = '/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/'
-        result = cv2.imwrite(path+'temp_pic.jpg', pic)
-        from pixellib.semantic import semantic_segmentation
-
-        segment_image = semantic_segmentation()
-        segment_image.load_pascalvoc_model(path+"deeplabv3_xception_tf_dim_ordering_tf_kernels.h5")
-        segment_image.segmentAsPascalvoc(path+'temp_pic.jpg', output_image_name=path+"image_new.jpg")
-        return
-
-    def get_wound_contour(self, pic):
-        blur = cv2.GaussianBlur(pic, (5, 5), 0)
-        edges = cv2.Canny(blur, 20, 70 )
-        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (18, 18))
-        # edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, kernel)
-        cv2.imshow("edges", edges)
-
-        contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
-        return contours
-
-    def preprocess_pic(self, pic):
-        pic = np.array(pic)
-        cv2.imshow("original pic", cv2.cvtColor(pic, cv2.COLOR_BGR2RGB))  # FIXME delete
-        pic = cv2.resize(pic, (int(pic.shape[1]*0.4), int(pic.shape[0]*0.4)))
-
-        cropped = self.cut_mouse(pic)
-
-        # self.kmeans_clostoring(cropped)
-        # self.spectral_clustering(cropped)
-        # self.deep_segmentation(cropped)
-
-        gray_cropped = cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
-        # wound_contours = self.get_wound_contour(gray_cropped)
-        # for i in range(len(wound_contours)):
-        #     hull = cv2.convexHull(wound_contours[i])
-        #     cv2.drawContours(cropped, [hull], -1, (255, 0, 0), -1)
-        # cv2.drawContours(cropped, wound_contours, -1, (0, 255, 0), thickness=cv2.FILLED)
-        # cv2.imshow("cropped", cropped)
-        # cv2.waitKey(0)
-
-        ## find wound contour ##
-        # contours = self.get_contours(gray_cropped)
-        # cropped_center_contour = []
-        # cropped_center_contour.append(self.find_center_contour(contours= contours, pic= pic))
-        # cv2.drawContours(cropped, cropped_center_contour, -1, (0, 255, 0), thickness=3)
-        # cv2.imshow("wound contour", cropped)
-        # cv2.waitKey(0)
-        return cropped
-
-    def get_wound_size(self, preprocess_pic):
-        pass
-
-    def get_histogram(self, image):
-        """
-         * Python program to create a color histogram.
-         *
-         * Usage: python ColorHistogram.py <filename>
-        """
-        import sys
-        import skimage.io
-        from matplotlib import pyplot as plt
-
-        # read original image, in full color, based on command
-        # line argument
-        image = np.array(image)
-        rgb_frame = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        hsv_frame = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
-        cv2.imshow("hsv image",hsv_frame)
-        cv2.imshow("rgb image",rgb_frame)
-        # tuple to select colors of each channel line
-        colors = ("red", "green", "blue")
-        channel_ids = (0, 1, 2)
-
-        # create the histogram plot, with three lines, one for
-        # each color
-        plt.xlim([0, 256])
-        for channel_id, c in zip(channel_ids, colors):
-            histogram, bin_edges = np.histogram(
-                hsv_frame[:, :, channel_id], bins=256, range=(0, 256)
-            )
-            plt.plot(bin_edges[0:-1], histogram, color=c)
-
-        plt.xlabel("Color value")
-        plt.ylabel("Pixels")
-
-        plt.show()
-        key = cv2.waitKey(0)
-
-    def histogram_equalization(self, image):
-
-        # convert from RGB color-space to YCrCb
-        image = np.array(image)
-        image = cv2.resize(image, (int(image.shape[1]*0.4), int(image.shape[0]*0.4)))
-        ycrcb_img = cv2.cvtColor(image, cv2.COLOR_BGR2YCrCb)
-
-        # equalize the histogram of the Y channel
-        ycrcb_img[:, :, 0] = cv2.equalizeHist(ycrcb_img[:, :, 0])
-
-        # convert back to RGB color-space from YCrCb
-        equalized_img = cv2.cvtColor(ycrcb_img, cv2.COLOR_YCrCb2BGR)
-
-        # cv2.imshow('img no HE', image)
-        # cv2.imshow('equalized_img', equalized_img)
-        # key = cv2.waitKey(0)
-        return equalized_img
-
-    # def start(self):
-    #     for day in range(0, 10):
-    #         self.get_frames_from_dataset(day)
-    #         print("day:", day)  # FIXME delete
-    #         if type(self.picture_list) != list: continue
-    #         for pic in self.picture_list:
-    #             pic = np.array(pic)
-    #             pic = cv2.cvtColor(pic, cv2.COLOR_BGR2RGB)
-    #             yolo_demo(pic)
-    #
-    #             key = cv2.waitKey(0)
-    #             if key == ord('q'):
-    #                 break
-    #         print("end of loop")
-
-    def segment_wound(self):
-        kernel = np.ones((5, 5), np.uint8)
-        start_p = 0.2
-        and_p = 1-start_p
-        closing = cv2.morphologyEx(self.only_wound, cv2.MORPH_CLOSE, kernel, iterations=2)
-        self.rect_for_grab_cut = [(int(self.only_wound.shape[1]*start_p),int(self.only_wound.shape[0]*start_p)),(int(self.only_wound.shape[1]*and_p),int(self.only_wound.shape[0]*and_p))]
-
-        img_grab_cut = grab_cut(closing, self.rect_for_grab_cut)
-        cv2.imshow("img_grab_cut", img_grab_cut)
-        cv2.waitKey(0)
-
-    def cut_frame_by_wound(self):
-        # cut current frame by wound rect
-        bg_percent = 0.5
+    def set_square_from_yolo_output(self):
         old_rect_width = self.wound_rect[1][0]-self.wound_rect[0][0]
         old_rect_hight = self.wound_rect[1][1]-self.wound_rect[0][1]
         new_rect_size = max(old_rect_width,old_rect_hight)
         rect_center = (self.wound_rect[0][0]+int(old_rect_width/2),self.wound_rect[0][1]+int(old_rect_hight/2))
         new_rect = [[rect_center[0] - int(new_rect_size/2),rect_center[1]- int(new_rect_size/2)],[rect_center[0] + int(new_rect_size/2),rect_center[1] + int(new_rect_size/2)]]
+        # set the square as the new wound rect
         self.wound_rect = new_rect
-        bg_pixel_to_add = int(bg_percent*new_rect_size)
-        print(new_rect_size)
-        print(bg_pixel_to_add)
-        self.only_wound = self.cur_frame[-bg_pixel_to_add + new_rect[0][1]:new_rect[1][1] + bg_pixel_to_add, -bg_pixel_to_add + new_rect[0][0]:new_rect[1][0] + bg_pixel_to_add]
-
-    def get_rectangle(self):
-        self.wound_rect = yolo_demo(self.cur_frame)
-
+        return  new_rect_size
 
     def preprocess_frame(self):
         self.cur_frame = np.array(self.cur_frame)
         self.cur_frame = cv2.cvtColor(self.cur_frame, cv2.COLOR_BGR2RGB)
+
+    def get_rectangle(self):
+        self.wound_rect = yolo_demo(self.cur_frame)
+
+    def cut_frame_by_wound(self):
+        # cut current frame by wound rect: take the yolo output and make a square with added background, then cut
+        bg_percent = 0.3
+        new_rect_size = self.set_square_from_yolo_output()
+        bg_pixel_to_add = int(bg_percent*new_rect_size)
+        self.only_wound = self.cur_frame[-bg_pixel_to_add + self.wound_rect[0][1]:self.wound_rect[1][1] + bg_pixel_to_add, -bg_pixel_to_add + self.wound_rect[0][0]:self.wound_rect[1][0] + bg_pixel_to_add]
+
+    def segment_wound(self):
+        # make a rectangle for grab cut algorithm
+        self.make_rect_for_grabCut(start_p = 0.22)
+
+        # snake_algorithm(self.only_wound, self.wound_rect)
+
+        # remove hair
+        kernel = np.ones((5, 5), np.uint8)
+        closing = cv2.morphologyEx(self.only_wound, cv2.MORPH_CLOSE, kernel, iterations=2)
+        # grab cut
+        img_grab_cut, img_with_init_mask, wound_mask = self.grab_cut(closing, mode="mask") # mode options are "mask" or "rect"
+        cv2.imshow("img_grab_cut", img_grab_cut)
+        cv2.imshow("img_grab_cut wound with init mask", img_with_init_mask)
+        cv2.waitKey(0)
+        contours, _ = cv2.findContours(wound_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        center_contour = self.find_center_contour(contours)
+        print("wound area is: ",cv2.contourArea(center_contour))
+        segment_wound = self.only_wound.copy()
+        cv2.drawContours(segment_wound, [center_contour], -1, (255, 0, 0), 2)
+        cv2.imshow("segment wound",segment_wound)
+        cv2.waitKey(0)
+
 
     def get_wound_segmentation(self, frame=None):
         path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/mouse1.jpg"
