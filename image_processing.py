@@ -6,7 +6,7 @@ from scipy.spatial import distance
 from sklearn.feature_extraction import image
 from sklearn.cluster import spectral_clustering
 from yolo.yolo_demo import *
-from find_wound_playGround import canny_with_trackbar
+from find_wound_playGround import find_squares
 
 import pixellib
 
@@ -35,6 +35,25 @@ class image_process_algo_master:
                     break
             print("end of loop")
     # ----------------------not in use------------------------ #
+    def get_last_bounding_radius(self):
+        if self.cur_day == 0: return None # if its day 0 than there is no last radius
+        pic = self.dataset.get_pic_with_tag(self.cur_mouse_name, self.cur_day)
+        if pic is None:
+            return None
+        else:
+            return pic.min_bounding_radius_in_pixels
+
+
+    def find_min_bounding_circle(self, contour,img=None,display=False):
+        (x,y), r = cv2.minEnclosingCircle(contour)
+        center_x = int(x)
+        center_y = int(y)
+        r = int(r)
+        if display:
+            cv2.circle(img, (center_x, center_y), r, (255, 255, 0), 2)
+            cv2.imshow("min bounding circle", img)
+            cv2.waitKey(0)
+        return r
 
     def find_center_contour(self, contours):    # function gets contour list and return the center contour out of the biggest three in the list
 
@@ -95,7 +114,11 @@ class image_process_algo_master:
         else:
             mode = cv2.GC_INIT_WITH_MASK
             # create circular mask
-            radius = (self.wound_rect[1][0]-self.wound_rect[0][0])/math.sqrt(2)
+            radius = None
+            if self.last_bounding_radius:
+                radius = int(self.last_bounding_radius*1.1)
+            else:
+                radius = (self.wound_rect[1][0]-self.wound_rect[0][0])/math.sqrt(2)
             mask = self.create_circular_mask(img.shape[0], img.shape[1], center=None, radius=radius)
             mask = np.where(mask == False, 0, 1).astype('uint8')
             # draw mask on original img
@@ -117,11 +140,17 @@ class image_process_algo_master:
     def set_square_from_yolo_output(self):
         old_rect_width = self.wound_rect[1][0]-self.wound_rect[0][0]
         old_rect_hight = self.wound_rect[1][1]-self.wound_rect[0][1]
-        new_rect_size = max(old_rect_width,old_rect_hight)
         rect_center = (self.wound_rect[0][0]+int(old_rect_width/2),self.wound_rect[0][1]+int(old_rect_hight/2))
+        last_bounding_radius = self.get_last_bounding_radius()
+        last_bounding_radius = 152 # FIXME temp delete!!!
+        if last_bounding_radius:
+            new_rect_size = last_bounding_radius*2
+        else:
+            new_rect_size = max(old_rect_width,old_rect_hight)
         new_rect = [[rect_center[0] - int(new_rect_size/2),rect_center[1]- int(new_rect_size/2)],[rect_center[0] + int(new_rect_size/2),rect_center[1] + int(new_rect_size/2)]]
-        # set the square as the new wound rect
+        # set the min square that contain the wound as the new wound rect
         self.wound_rect = new_rect
+        self.last_bounding_radius = last_bounding_radius
         return new_rect_size
 
     def preprocess_frame(self):
@@ -140,9 +169,8 @@ class image_process_algo_master:
 
     def segment_wound(self):
         # make a rectangle for grab cut algorithm
-        self.make_rect_for_grabCut(start_p = 0.22)
+        self.make_rect_for_grabCut(start_p = 0)
 
-        # snake_algorithm(self.only_wound, self.wound_rect)
 
         # remove hair
         kernel = np.ones((5, 5), np.uint8)
@@ -155,15 +183,26 @@ class image_process_algo_master:
         contours, _ = cv2.findContours(wound_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         center_contour = self.find_center_contour(contours)
         print("wound area is: ",cv2.contourArea(center_contour))
-        segment_wound = self.only_wound.copy()
-        cv2.drawContours(segment_wound, [center_contour], -1, (255, 0, 0), 2)
-        cv2.imshow("segment wound",segment_wound)
+        only_wound_to_show = self.only_wound.copy()
+        cv2.drawContours(only_wound_to_show, [center_contour], -1, (255, 0, 0), 2)
+        cv2.imshow("segmented wound",only_wound_to_show)
         cv2.waitKey(0)
-
-    def get_wound_segmentation(self, frame=None):
+        # prepare bounding radius for net image evaluation
+        circle_r = self.find_min_bounding_circle(center_contour, only_wound_to_show,display=True)
+        return circle_r
+    def get_wound_segmentation(self, frame=None,exp_name=None,mouse_name=None,day=None):
         path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/mouse1.jpg"
         frame = cv2.imread(path)
+
+        # temp for find and segment squares in the img
+        # find_squares(frame)
+        # return
+        # --------------------------------------------
+        full_name = str(exp_name) + "_" + str(mouse_name)
+
         self.cur_frame = frame
+        self.cur_mouse_name = full_name
+        self.cur_day = day
         self.get_rectangle()
         self.cut_frame_by_wound()
         self.segment_wound()
