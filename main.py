@@ -17,8 +17,8 @@ def main():
     args = parse_arguments()
     dataset = prepare_dataset(args)
     # dataset.get_dataset_path()
-    image_pr = image_processing.ImageProcessAlgoMaster(dataset)
     # image_process_algo = ImageProcessAlgoMaster(dataset)
+    image_pr = image_processing.image_process_algo_master(dataset)
     image_pr.get_wound_segmentation()
 
 

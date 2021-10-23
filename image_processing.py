@@ -122,7 +122,7 @@ class image_process_algo_master:
         new_rect = [[rect_center[0] - int(new_rect_size/2),rect_center[1]- int(new_rect_size/2)],[rect_center[0] + int(new_rect_size/2),rect_center[1] + int(new_rect_size/2)]]
         # set the square as the new wound rect
         self.wound_rect = new_rect
-        return  new_rect_size
+        return new_rect_size
 
     def preprocess_frame(self):
         self.cur_frame = np.array(self.cur_frame)
@@ -159,7 +159,6 @@ class image_process_algo_master:
         cv2.drawContours(segment_wound, [center_contour], -1, (255, 0, 0), 2)
         cv2.imshow("segment wound",segment_wound)
         cv2.waitKey(0)
-
 
     def get_wound_segmentation(self, frame=None):
         path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/mouse1.jpg"
