@@ -1,7 +1,6 @@
 import cv2
 import numpy as np
 
-# cap = cv2.VideoCapture(1) # web camera
 
 whT = 608  # (width height Target) define the size of the input pictures to the net
 confThreshold = 0.01
@@ -14,8 +13,8 @@ classNames = []
 classNames.append('wound')
 
 # define net
-modelConfiguration = 'yolo/yolov3_custom.cfg'
-modelWeights = 'yolo/yolov3_custom_final.weights'
+modelConfiguration = 'yolo/yolov3.cfg'
+modelWeights = 'yolo/yolov3.weights'
 net = cv2.dnn.readNetFromDarknet(modelConfiguration, modelWeights)
 net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
 net.setPreferableTarget(cv2.dnn.DNN_TARGET_CPU)
@@ -26,7 +25,6 @@ def findObjects(outputs, img):
     bbox = []  # bounding box (x,y,w,h)
     classIds = []
     confs = []  # confides values
-    print("outputs len is: ",len(outputs))
     for output in outputs:
         for det in output:     # det = detection
             scores = det[5:]  # remove the first 5 values from a detection (x,y,w,h,confidence)
@@ -42,7 +40,6 @@ def findObjects(outputs, img):
     # print("num of bounding boxes with high confidence found: ",len(bbox))
     indices_to_keep = cv2.dnn.NMSBoxes(bbox,confs,confThreshold,nmsThreshold) # non maximum suppression: removes over lapping bboxes
                                                             # (leaves only the one with the highest confidence level
-    print("indices to keep len is: ", len(indices_to_keep))
     x, y, w, h = 0, 0, 0, 0
     for i in indices_to_keep:
         i = i[0]  # because there is an extra [] in the original indices list
@@ -50,7 +47,6 @@ def findObjects(outputs, img):
         x, y, w, h = box[0], box[1], box[2], box[3]
         cv2.rectangle(img, (x, y), (x+w, y+h), (255, 0, 255), 2)
         cv2.putText(img, f'{classNames[classIds[i]].upper()}{int(confs[i]*100)}%', (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 255), 2)
-    cv2.imshow("img with rectangle", img)
     return [[x, y], [x+w, y+h]]
 
 
@@ -79,3 +75,14 @@ def yolo_demo(img_original):
 
     return findObjects(outputs, img)
 
+def test_yolo():
+    import tkinter.filedialog
+    imgs = tkinter.filedialog.askopenfiles()
+    for file in imgs:
+        img = cv2.imread(file.name)
+        rect = yolo_demo(img)
+        cv2.rectangle(img, rect[0], rect[1], (0, 0, 255), 3)
+        print(rect)
+        img = cv2.resize(img, (int(img.shape[1] * 0.3), int(img.shape[0] * 0.3)))
+        cv2.imshow("img", img)
+        cv2.waitKey(0)
