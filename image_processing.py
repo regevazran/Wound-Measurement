@@ -35,12 +35,9 @@ class image_process_algo_master:
                     break
             print("end of loop")
     # ----------------------not in use------------------------ #
-    def get_last_day(self):
-        day = None
-        return day
 
     def get_last_wound_area(self):
-        last_day = self.get_last_day()
+        last_day = self.dataset.get_last_day(self.cur_mouse_name,self.cur_day)
         if last_day == None: return None
         pic = self.dataset.get_pic_with_tag(self.cur_mouse_name, last_day)
         if pic is None:
@@ -49,7 +46,7 @@ class image_process_algo_master:
             return pic.min_bounding_radius_in_pixels
 
     def get_last_bounding_radius(self):
-        last_day = self.get_last_day()
+        last_day = self.dataset.get_last_day(self.cur_mouse_name,self.cur_day)
         if last_day == None: return None
         pic = self.dataset.get_pic_with_tag(self.cur_mouse_name, last_day)
         if pic is None:
@@ -217,14 +214,14 @@ class image_process_algo_master:
         # return
         # --------------------------------------------
         full_name = str(exp_name) + "_" + str(mouse_name)
-        wound_area = None
+        self.cur_frame = frame
+        self.cur_mouse_name = full_name
+        self.cur_day = day
         last_bound_circle_r =None
         last_bound_circle_r =65 # FIXME delete
         last_wound_area = self.get_last_wound_area()
         last_wound_area = 5877 #FIXME delete!!!!!
-        self.cur_frame = frame
-        self.cur_mouse_name = full_name
-        self.cur_day = day
+        wound_area = None
         self.get_rectangle()
         while (wound_area == None) or (wound_area > last_wound_area):
             self.cut_frame_by_wound(last_bound_circle_r)

@@ -151,6 +151,26 @@ class DataSet:
             if pictures.empty is not True:
                 self.data.at[mouse_index, 'pictures_day' + day_num] = pictures.iloc[0][day]
 
+    def get_last_day(self, mouse_name, cur_day):
+        if cur_day is None: return None
+        last_day = cur_day - 1
+        try:
+            if mouse_name not in self.mice_names:
+                print("get_last_day: mouse name was not found in data set")
+                return None
+        except KeyError as key_error_msg:
+            print(key_error_msg)
+            exit(-1)
+        while last_day >= 0 :
+            mouse_index = self.data[self.data['Mouse'] == mouse_name].index.to_numpy()[0]
+            data = self.data.at[mouse_index, 'algo_size_in_pixels_day' + str(last_day)]
+            if data is not None: break
+            last_day = last_day - 1
+        if last_day < 0 :
+            print("get_last_day: no preliminary data found")
+            return None
+        return last_day
+
     def get_pic_with_tag(self, mouse_name, day):
         pic = Picture()
         day = str(day)
