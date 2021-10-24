@@ -5,7 +5,7 @@ import os
 from PIL import Image
 
 sheet_names = ['Contraction', 'Scab', 'Wound close', 'Size by pixels', 'Absolute size']
-columns_names = ['contraction', 'scab', 'wound_close', 'size_in_pixels', 'min_bounding_radius_in_pixels', 'size_in_cm', 'pictures']
+columns_names = ['contraction', 'scab', 'wound_close', 'size_in_pixels', 'algo_size_in_pixels', 'min_bounding_radius_in_pixels', 'size_in_cm', 'pictures']
 
 
 class Picture:
@@ -15,6 +15,7 @@ class Picture:
         self.contraction = None
         self.scab = None
         self.size_in_pixels = None
+        self.algo_size_in_pixels = None
         self.min_bounding_radius_in_pixels = None
         self.size_in_cm = None
         self.wound_close = None
@@ -166,6 +167,7 @@ class DataSet:
         pic.scab = self.data.at[mouse_index, 'scab_day' + day]
         pic.contraction = self.data.at[mouse_index, 'contraction_day' + day]
         pic.size_in_pixels = self.data.at[mouse_index, 'size_in_pixels_day' + day]
+        pic.algo_size_in_pixels = self.data.at[mouse_index, 'algo_size_in_pixels_day' + day]
         pic.min_bounding_radius_in_pixels = self.data.at[mouse_index, 'min_bounding_radius_in_pixels_day' + day]
         pic.size_in_cm = self.data.at[mouse_index, 'size_in_cm_day' + day]
         pic.wound_close = self.data.at[mouse_index, 'wound_close_day' + day]
@@ -179,7 +181,7 @@ def prepare_dataset(args):
     data_generator.get_mice_name_list()
     data_generator.add_mice()
     # print(data_generator.data.to_string())
-    # data_generator.dataset.at[0,'pictures_day0'][0].show()    # show picture example form the data set 
+    # data_generator.dataset.at[0,'pictures_day0'][0].show()    # show picture example form the data set
     # data_generator.dataset.to_csv(csv_path)
     return data_generator
 
