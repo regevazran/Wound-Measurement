@@ -7,7 +7,7 @@ from sklearn.feature_extraction import image
 from sklearn.cluster import spectral_clustering
 from yolo.yolo_demo import *
 from find_wound_playGround import find_squares
-
+from yolo.yolov5_executor import YoloAlgo
 import pixellib
 
 
@@ -16,6 +16,7 @@ class image_process_algo_master:
         self.dataset = dataset
         self.picture_list = []
         self.cur_frame = None
+        self.yolo = YoloAlgo()
 
     # ----------------------not in use------------------------ #
     def get_frames_from_dataset(self, day=0):
@@ -169,7 +170,8 @@ class image_process_algo_master:
         self.cur_frame = cv2.cvtColor(self.cur_frame, cv2.COLOR_BGR2RGB)
 
     def get_rectangle(self):
-        self.wound_rect = yolo_demo(self.cur_frame)
+        yolov5_detection = self.yolo.run(self.cur_frame)
+        self.wound_rect = [[yolov5_detection['x0'], yolov5_detection['y0']], [yolov5_detection['x1'], yolov5_detection['y1']]]
 
     def cut_frame_by_wound(self,bounding_r=None):
         # cut current frame by wound rect: take the yolo output and make a square with added background, then cut
@@ -205,7 +207,7 @@ class image_process_algo_master:
         cv2.destroyAllWindows()
         return circle_r, wound_area
 
-    def get_wound_segmentation(self, frame=None,exp_name=None,mouse_name=None,day=None):
+    def get_wound_segmentation(self, frame=None, exp_name=None,mouse_name=None,day=None):
         path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/bounding circle exp/day6.jpg"
         frame = cv2.imread(path)
 

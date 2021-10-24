@@ -23,7 +23,5 @@ def main():
 
 
 if __name__ == '__main__':
-    # main()
-    from yolo.run_yolov5 import test_yolov5
-    test_yolov5()
+    main()
 
