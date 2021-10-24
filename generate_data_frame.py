@@ -5,7 +5,7 @@ import os
 from PIL import Image
 
 sheet_names = ['Contraction', 'Scab', 'Wound close', 'Size by pixels', 'Absolute size']
-columns_names = ['contraction', 'scab', 'wound_close', 'size_in_pixels', 'size_in_cm', 'pictures']
+columns_names = ['contraction', 'scab', 'wound_close', 'size_in_pixels', 'algo_size_in_pixels', 'min_bounding_radius_in_pixels', 'size_in_cm', 'pictures']
 
 
 class Picture:
@@ -15,6 +15,8 @@ class Picture:
         self.contraction = None
         self.scab = None
         self.size_in_pixels = None
+        self.algo_size_in_pixels = None
+        self.min_bounding_radius_in_pixels = None
         self.size_in_cm = None
         self.wound_close = None
         self.pictures = []
@@ -149,15 +151,44 @@ class DataSet:
             if pictures.empty is not True:
                 self.data.at[mouse_index, 'pictures_day' + day_num] = pictures.iloc[0][day]
 
+    def get_last_day(self, mouse_name, cur_day):
+        if cur_day is None: return None
+        last_day = cur_day - 1
+        try:
+            if mouse_name not in self.mice_names:
+                print("get_last_day: mouse name was not found in data set")
+                return None
+        except KeyError as key_error_msg:
+            print(key_error_msg)
+            exit(-1)
+        while last_day >= 0 :
+            mouse_index = self.data[self.data['Mouse'] == mouse_name].index.to_numpy()[0]
+            data = self.data.at[mouse_index, 'algo_size_in_pixels_day' + str(last_day)]
+            if data is not None: break
+            last_day = last_day - 1
+        if last_day < 0 :
+            print("get_last_day: no preliminary data found")
+            return None
+        return last_day
+
     def get_pic_with_tag(self, mouse_name, day):
         pic = Picture()
         day = str(day)
+        try:
+            if mouse_name not in self.mice_names:
+                print("get_pic_with_tag: mouse name was not found in data set")
+                return None
+        except KeyError as key_error_msg:
+            print(key_error_msg)
+            exit(-1)
         mouse_index = self.data[self.data['Mouse'] == mouse_name].index.to_numpy()[0]
         pic.mouse_name = mouse_name
         pic.day = day
         pic.scab = self.data.at[mouse_index, 'scab_day' + day]
         pic.contraction = self.data.at[mouse_index, 'contraction_day' + day]
         pic.size_in_pixels = self.data.at[mouse_index, 'size_in_pixels_day' + day]
+        pic.algo_size_in_pixels = self.data.at[mouse_index, 'algo_size_in_pixels_day' + day]
+        pic.min_bounding_radius_in_pixels = self.data.at[mouse_index, 'min_bounding_radius_in_pixels_day' + day]
         pic.size_in_cm = self.data.at[mouse_index, 'size_in_cm_day' + day]
         pic.wound_close = self.data.at[mouse_index, 'wound_close_day' + day]
         pic.pictures = self.data.at[mouse_index, 'pictures_day' + day]
@@ -165,11 +196,12 @@ class DataSet:
 
 
 def prepare_dataset(args):
-    data_generator = DataSet(path="/Users/regevazran/Desktop/technion/semester i/project c/data/mouse batches/AWHA-1/AWHA-1.xlsx")  # FIXME Tomer i changed the path and the name of the exel file from example_exp to AWHA-1
+    data_generator = DataSet(path="/Users/regevazran1/Desktop/technion/semester i/project c/data/mouse batches/AWHA-1/AWHA-1.xlsx")  # FIXME Tomer i changed the path and the name of the exel file from example_exp to AWHA-1
     data_generator.get_new_data_to_enter()
     data_generator.get_mice_name_list()
     data_generator.add_mice()
-    return data_generator
-    # print(data_generator.dataset.to_string())                 # FIXME delete
-    # data_generator.dataset.at[0,'pictures_day0'][0].show()    # show picture example form the data set FIXME delete
+    # print(data_generator.data.to_string())
+    # data_generator.dataset.at[0,'pictures_day0'][0].show()    # show picture example form the data set
     # data_generator.dataset.to_csv(csv_path)
+    return data_generator
+

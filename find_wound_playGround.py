@@ -204,7 +204,6 @@ def get_contours(self, pic):
         # cv2.imshow("thresh", thresh_pic)
         contours, _ = cv2.findContours(thresh_pic, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         return contours
-
 def pic2HSV(self, pic):
         pic = np.array(pic)
         pic = cv2.resize(pic, (int(pic.shape[1]*0.4), int(pic.shape[0]*0.4)))
@@ -242,9 +241,6 @@ def pic2HSV(self, pic):
         print(init.shape)
         print(init)
         return hsv_frame
-
-
-
 def get_rect(mouse_img):
     shape = mouse_img.shape
     width = int(coordinates[2] * shape[1])
@@ -252,8 +248,6 @@ def get_rect(mouse_img):
     top_left_x = int(coordinates[0] * shape[1] - width / 2)
     top_left_y = int(coordinates[1] * shape[0] - height / 2)
     return top_left_x, top_left_y, width, height
-
-
 def get_init_for_snake(only_wound_img,wound_rect):
 
     center_x = int(only_wound_img.shape[0] / 2)
@@ -266,16 +260,12 @@ def get_init_for_snake(only_wound_img,wound_rect):
     c = center_x + radius * np.cos(s)
     init = np.array([r, c]).T
     return init
-
-
 def pascalvoc_model():
     pass
     # segment_image = semantic_segmentation()
     # segment_image.load_pascalvoc_model("deeplabv3_xception_tf_dim_ordering_tf_kernels.h5")
     # segment_image.segmentAsPascalvoc(mouse_path, output_image_name="mouse_segmented.jpg")
     # exit(-1)
-
-
 def snake_algorithm(only_wound_original,wound_rect):
     init = get_init_for_snake(only_wound_original,wound_rect)
 
@@ -324,8 +314,6 @@ def snake_algorithm(only_wound_original,wound_rect):
     cv2.drawContours(only_wound_original, contours, -1, (0, 0, 255), 2)
     cv2.imshow("mouse_original", only_wound_original)
     cv2.waitKey(0)
-
-
 def canny_with_trackbar(only_wound_original):
     src = only_wound_original
     max_lowThreshold = 100
@@ -347,8 +335,6 @@ def canny_with_trackbar(only_wound_original):
     cv2.createTrackbar(title_trackbar, window_name, 0, max_lowThreshold, CannyThreshold)
     CannyThreshold(0)
     cv2.waitKey()
-
-
 # chan vese
 from skimage import data, img_as_float
 from skimage.segmentation import chan_vese
@@ -363,15 +349,8 @@ def chan_vese(image):
     print(cv[1])
     cv2.imshow("chan vese", image)
     cv2.waitKey(0)
-
 # segmenting mouse wound using grabCut
 import matplotlib.patches as patches
-
-
-
-
-
-
 def preprocess_wound(img_original):
     # Read the image and perfrom an OTSU threshold
     img = img_original.copy()
@@ -389,6 +368,10 @@ def preprocess_wound(img_original):
     cv2.imshow("blur", blur)
     cv2.imshow("thresh", thresh)
     return img
+
+def find_squares(img):
+
+    return
 
 if __name__ == '__main__':
     # Get Wound
