@@ -171,7 +171,7 @@ class image_process_algo_master:
 
     def get_rectangle(self):
         yolov5_detection = self.yolo.run(self.cur_frame)
-        self.wound_rect = [[yolov5_detection['x0'], yolov5_detection['y0']], [yolov5_detection['x1'], yolov5_detection['y1']]]
+        self.wound_rect = None if yolov5_detection is None else [[yolov5_detection['x0'], yolov5_detection['y0']], [yolov5_detection['x1'], yolov5_detection['y1']]]
 
     def cut_frame_by_wound(self,bounding_r=None):
         # cut current frame by wound rect: take the yolo output and make a square with added background, then cut
@@ -208,7 +208,7 @@ class image_process_algo_master:
         return circle_r, wound_area
 
     def get_wound_segmentation(self, frame=None, exp_name=None,mouse_name=None,day=None):
-        path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/bounding circle exp/day6.jpg"
+        path = "C:/Users/tomer/OneDrive/שולחן העבודה/Technion/Project B/data/mouse batches/AWHA-1/P6/Day 3/IMG_20201230_194732.jpg"
         frame = cv2.imread(path)
 
         # temp for find and segment squares in the img
@@ -225,7 +225,9 @@ class image_process_algo_master:
         last_wound_area = 5877 #FIXME delete!!!!!
         wound_area = None
         self.get_rectangle()
-        while (wound_area == None) or (wound_area > last_wound_area):
+        if self.wound_rect is None:
+            return
+        while wound_area is None or wound_area > last_wound_area:
             self.cut_frame_by_wound(last_bound_circle_r)
             last_bound_circle_r = int(self.last_bounding_radius * 0.9)    # decries radius for next iteration
             bound_circle_r , wound_area = self.segment_wound()

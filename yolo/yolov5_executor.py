@@ -1,14 +1,13 @@
 import torch
 import cv2
 import numpy as np
-from yolo.yolov5.detect import run
 import tkinter.filedialog
 import os
 
 # !python detect.py --weights runs/train/yolov5s_results2/weights/yolov5_weights.pt --img 416 --conf 0.4 --source "/content/drive/MyDrive/project_c/valuationdata"
 
 
-def show_image(detection, image_copy):
+def show_image(image_copy, detection):
     cv2.rectangle(image_copy, pt1=(detection['x0'], detection['y0']),
                   pt2=(detection['x1'], detection['y1']), color=(255, 0, 0), thickness=3)
     cv2.putText(image_copy, text=str(detection['class'] + str(detection['confidence'])),
@@ -17,6 +16,7 @@ def show_image(detection, image_copy):
     img = cv2.cvtColor(image_copy, cv2.COLOR_RGB2BGR)
     img = cv2.resize(img, (int(img.shape[1] * 0.3), int(img.shape[0] * 0.3)))
     cv2.imshow("img", img)
+    cv2.waitKey(0)
 
 
 def yolo_results_to_dict(res):
@@ -28,18 +28,19 @@ def yolo_results_to_dict(res):
 
 
 def test_yolov5():
+
     images = tkinter.filedialog.askopenfiles()
-
     src_directory = 'C:/Users/tomer/PycharmProjects/Wound-Measurement/yolo/yolov5/'
-
     model = torch.hub.load(src_directory, 'custom', path=str(src_directory + 'yolov5_weights.pt'), source='local')
 
     for file in images:
         img = cv2.imread(file.name)
         img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        detection_dict = yolo_results_to_dict(model(img))
-        show_image(img.copy(), detection_dict)
-        cv2.waitKey(0)
+        model_res = model(img)
+        if model_res.pred:
+            detection_dict = yolo_results_to_dict(model_res)
+            show_image(img.copy(), detection_dict)
+            cv2.waitKey(0)
 
 
 class YoloAlgo:
@@ -50,9 +51,11 @@ class YoloAlgo:
 
     def run(self, image):
         image_copy = image.copy()
-        detection_dict = yolo_results_to_dict(self.model(image))
-        show_image(detection_dict, image_copy)
-        return detection_dict
-
-
-
+        rgb_image_copy = cv2.cvtColor(image_copy, cv2.COLOR_BGR2RGB)
+        model_res = self.model(rgb_image_copy)
+        if model_res.pred:
+            detection_dict = yolo_results_to_dict(model_res)
+            show_image(image_copy, detection_dict)
+            return detection_dict
+        else:
+            return None

@@ -1,5 +1,6 @@
 import image_processing
 from generate_data_frame import prepare_dataset
+from yolo.yolov5_executor import test_yolov5
 import argparse
 data_set_path = "C:/Users/tomer/OneDrive/שולחן העבודה/Technion/Project B/data/wound_measurement_dataset.csv"
 
@@ -10,6 +11,7 @@ def parse_arguments():
                         help='Data set location')
     parser.add_argument('-a', '--add', type=str, default="",
                         help='Add new excel to existing data-set')
+    parser.add_argument('-ty', '--test-yolo', action='store_true')
     return parser.parse_args()
 
 
@@ -23,5 +25,9 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    args = parse_arguments()
+    if args.test_yolo:
+        test_yolov5()
+    else:
+        main()
 
