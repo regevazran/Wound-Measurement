@@ -421,7 +421,8 @@ class image_process_algo_master:
         # Apply adaptiveThreshold at the bitwise_not of gray, notice the ~ symbol
         img_not = cv2.bitwise_not(img)
         img = cv2.adaptiveThreshold(img_not, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2)
-
+        cv2.imshow("thresh",img)
+        cv2.waitKey(0)
         max_line_width = int(img.shape[0]*0.08)
         sum_list = []
         lines_idx = []
@@ -556,8 +557,10 @@ class image_process_algo_master:
         # template match to get a portion of the background
         path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template.PNG"
         template = cv2.imread(path)
+
         rot_mouse = self.rotate_image_45(self.cur_frame)
         target = self.template_match(rot_mouse,template,ShowMatches=ShowTemplateMatch) # find and return square of the background of the current image
+
 
         # calc avg distance between squares of the background
         template_dist = self.dist_between_squares(template, ShowLines, imgName="template")
@@ -744,7 +747,7 @@ class image_process_algo_master:
         return circle_r, wound_area
 
     def get_wound_segmentation(self, frame=None, exp_name=None, mouse_name=None, day=None):
-        path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template exp/p29.jpg"
+        path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/bounding circle exp/day0.jpg"
         if frame is None: frame = cv2.imread(path)
 
         # preper data for frame segmentation
@@ -752,7 +755,7 @@ class image_process_algo_master:
         full_name = str(exp_name) + "_" + str(mouse_name)
         self.cur_mouse_name = full_name
         self.cur_day = day
-        self.get_normaliz_factor(ShowLines=True, ShowTransformImg=True, ShowTemplateMatch=True)
+        self.get_normaliz_factor(ShowLines=True, ShowTransformImg=True, ShowTemplateMatch=False)
         last_bound_circle_r = None
         # last_bound_circle_r = 65  # FIXME delete!!!!
         last_wound_area = self.get_last_wound_area()
