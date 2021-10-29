@@ -30,8 +30,35 @@ class DataSet:
         self.data = None
         self.create_new_dataset()
 
-    def update_dataset(self):
-        pass
+    def update_dataset(self, mouse_name, day, data_value, type="radius"):   # data_type options: ("radius", "area") # FIXME need to test
+        # extract current value from data set
+        day = str(day)
+        if type == "radius": data_type = str('min_bounding_radius_in_pixels_day' + day)
+        elif type == "area": data_type = str('algo_size_in_pixels_day' + day)
+        else:
+            print("update_dataset: invalid data type")
+            return
+        try:
+            if mouse_name not in self.mice_names:
+                print("get_pic_with_tag: mouse name was not found in data set")
+                return None
+        except KeyError as key_error_msg:
+            print(key_error_msg)
+            exit(-1)
+        mouse_index = self.data[self.data['Mouse'] == mouse_name].index.to_numpy()[0]
+        cur_dataset_value = self.data.at[mouse_index,data_type]  # dataset value is a list in a form of [avg value,value weight]
+
+        # set new value
+        if cur_dataset_value is None:
+            size = 0
+            weight = 0
+        else:
+            size = cur_dataset_value[0]
+            weight = cur_dataset_value[1]
+        weight = weight+1
+        self.data.at[mouse_index,data_type] = [(size + data_value)/(weight), weight]
+        return
+
     def create_new_dataset(self):
         columns = ['Mouse']
         for column in columns_names:
