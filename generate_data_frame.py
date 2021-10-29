@@ -1,11 +1,10 @@
+from PIL import Image
 import pandas as pd
-from tkinter import filedialog
 import ntpath
 import os
-from PIL import Image
 
 sheet_names = ['Contraction', 'Scab', 'Wound close', 'Size by pixels', 'Absolute size']
-columns_names = ['contraction', 'scab', 'wound_close', 'size_in_pixels', 'algo_size_in_pixels', 'min_bounding_radius_in_pixels', 'size_in_cm', 'pictures']
+columns_names = ['contraction', 'scab', 'wound_close', 'size_in_pixels', 'algo_size_in_pixels', 'min_bounding_radius_in_pixels', 'size_in_cm', 'pictures']  # Check columns names
 
 
 class Picture:
@@ -23,185 +22,209 @@ class Picture:
 
 
 class DataSet:
-    def __init__(self, path=None):
-        self.excel_path = path if path is not None else filedialog.askopenfilename(filetypes=[("Excel files", ".xlsx .xls .csv")])
+    def __init__(self, args):
+        self.args = args
+        self.excel_path = args.add_excel
+        self.dataset_path = args.dataset
+        self.dataset = None
         self.new_data_to_enter = None
         self.mice_names = []
-        self.data = None
-        self.create_new_dataset()
 
-    def update_dataset(self):
-        pass
-    def create_new_dataset(self):
+    def get_dataset(self):
+        if self.dataset_path:
+            if os.path.isfile(self.dataset_path):
+                if self.dataset_path.split(".")[-1] == 'csv':
+                    self.dataset = pd.read_csv(self.dataset_path).fillna(-1)
+                    print(f"Loaded existing dataset! {self.dataset_path.split('/')[-1]}")
+                    return
+                else:
+                    print(f"The dataset given is not a csv file!\nPath is: {self.dataset_path}")
+            else:
+                print(f"The dataset path given does not exist!\nPath is: {self.dataset_path}")
+        else:
+            print(f"No dataset path was given by the user.")
+        self.create_new_dataframe()
+
+    def create_new_dataframe(self):
+        print(f"Creating new empty dataset.")
         columns = ['Mouse']
         for column in columns_names:
             for i in range(11):
                 columns.append(str(column) + '_day' + str(i))
-        self.data = pd.DataFrame(columns=columns)
+        self.dataset = pd.DataFrame(columns=columns)
+
+    def update_dataset(self):
+        if self.excel_path:
+            if os.path.isfile(self.excel_path):
+                if self.excel_path.split(".")[-1] == 'xlsx' or self.excel_path.split(".")[-1] == 'xls':
+                    self.get_new_data_to_enter()
+                else:
+                    print(f"The excel path given is not an excel file!\nPath is: {self.excel_path}")
+            else:
+                print(f"The excel path given does not exist!\nPath is: {self.excel_path}")
+        else:
+            print(f"No Excel path was given by the user.")
+        if self.new_data_to_enter:
+            self.get_mice_name_list()
+            self.add_mice()
+            # TODO: find a way to add this data to the existing csv
+            self.dataset.at[0, 'pictures_day0'][0].show()    # show picture example form the data set
+            self.dataset.to_csv("new_path.csv")  # TODO: change new dataset name
 
     def get_new_data_to_enter(self):
-        try:
-            # extract sheets from excel
-            dataframes_from_excel = []
-            for sheet in sheet_names:
-                dataframes_from_excel.append(
-                    pd.read_excel(self.excel_path, engine='openpyxl', index_col=False, sheet_name=sheet))
-            # TOMER: I put this in a nice loop :)
-            # contraction = pd.read_excel(self.excel_path, engine='openpyxl', index_col=False, sheet_name='Contraction')
-            # scab = pd.read_excel(self.excel_path, engine='openpyxl', index_col=False, sheet_name='Scab')
-            # wound_close = pd.read_excel(self.excel_path, engine='openpyxl', index_col=False, sheet_name='Wound close')
-            # size_in_pixels = pd.read_excel(self.excel_path, engine='openpyxl', index_col=False, sheet_name='Size by pixels')
-            # size_in_cm = pd.read_excel(self.excel_path, engine='openpyxl', index_col=False, sheet_name='Absolute size')
-            #
-            # dataframes_from_excel = [contraction, scab, wound_close, size_in_pixels, size_in_cm]
+        stack_df = self.get_raw_data_from_excel()
+        stack_df = self.get_pictures_data(stack_df)
+        self.new_data_to_enter = stack_df
 
-            # check if all sheets have the same columns
-            if not all([set(dataframes_from_excel[0].columns) == set(df.columns) for df in dataframes_from_excel]):
-                print('Some sheets have different columns')
+    def get_raw_data_from_excel(self):
+        # extract sheets from excel
+        dataframes_from_excel = []
+        for sheet in sheet_names:
+            dataframes_from_excel.append(
+                pd.read_excel(self.excel_path, engine='openpyxl', index_col=False, sheet_name=sheet))
+        # check if all sheets have the same columns
+        if not all([set(dataframes_from_excel[0].columns) == set(df.columns) for df in dataframes_from_excel]):
+            print(f'Some sheets have different columns. \n{dataframes_from_excel[0].columns}')
+            exit(-1)
 
-            # concatenate data sheets into one dataframe
-            stack_df = pd.concat(dataframes_from_excel)
-            stack_df = stack_df.reset_index(drop=True)
-            stack_df.dropna(axis='columns')
-            stack_df.dropna(axis='index')
+        # concatenate data sheets into one dataframe
+        stack_df = pd.concat(dataframes_from_excel)
+        stack_df = stack_df.reset_index(drop=True)
+        stack_df.dropna(axis='columns')
+        stack_df.dropna(axis='index')
 
-            # check if all columns have valid names
-            for col in stack_df.columns:
-                if col != 'group' and col != 'Mice':
-                    col = col.split()
-                    if col[0] != 'Day' or not 0 <= int(col[1]) <= 10:
-                        print("incorrect columns name in excel sheets:", col, "is not a valid column")
+        # check if all columns have valid names
+        for col in stack_df.columns:
+            if col != 'group' and col != 'Mice':
+                col = col.split()
+                if col[0] != 'Day' or not 0 <= int(col[1]) <= 10:
+                    print("incorrect columns name in excel sheets:", col, "is not a valid column")
+                    exit(-1)
 
+        return stack_df
 
-            # extract pictures from directory tree
-            mice_list = stack_df['Mice'].unique()
-            mice_pictures = pd.DataFrame(columns=stack_df.columns)
-            dir_root = ntpath.dirname(self.excel_path)
-            mice_dir_list = next(os.walk(dir_root))[1]
+    def get_pictures_data(self, stack_df):
+        # extract pictures from directory tree
+        mice_list = stack_df['Mice'].unique()
+        mice_pictures = pd.DataFrame(columns=stack_df.columns)
+        dir_root = ntpath.dirname(self.excel_path)
+        mice_dir_list = next(os.walk(dir_root))[1]
 
-            for mouse in mice_dir_list:
-                mouse_name = ''.join(mouse.split(sep="-"))
-                if mouse_name not in mice_list:
-                    print("mouse name: ", mouse," is not in excel file") # check mouse in directory tree match mice in excel
-                    break
-                mice_pictures = mice_pictures.append({'group':'pictures','Mice': mouse_name}, ignore_index=True)
-                mouse_index = mice_pictures[mice_pictures['Mice'] == mouse_name].index.to_numpy()[0]
+        for mouse in mice_dir_list:
+            mouse_name = ''.join(mouse.split(sep="-"))
+            if mouse_name not in mice_list:
+                print("mouse name: ", mouse, " is not in excel file.\n check mouse in directory tree match mice in excel")
+                exit(-1)
+            mice_pictures = mice_pictures.append({'group': 'pictures', 'Mice': mouse_name}, ignore_index=True)
+            mouse_index = mice_pictures[mice_pictures['Mice'] == mouse_name].index.to_numpy()[0]
 
-                for (root, dirs, files) in os.walk(dir_root+'/'+mouse):
-                    day_num = ntpath.split(root)[1].split()
-                    if day_num[0].lower() != 'day': continue # go over only directories of days
-                    image_list = []
-                    for image in files:
-                        if not image.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')): continue
-                        image_list.append(Image.open(root +'/'+image))
-                    mice_pictures.at[mouse_index, 'Day ' + day_num[1]] = image_list
+            for (root, dirs, files) in os.walk(dir_root + '/' + mouse):
+                day_num = ntpath.split(root)[1].split()
+                # Iterate only in 'days' directories
+                if day_num[0].lower() != 'day':
+                    continue
+                image_list = []
+                for image in files:
+                    # Take only pictures
+                    if not image.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
+                        continue
+                    image_list.append(Image.open(root + '/' + image))
+                mice_pictures.at[mouse_index, 'Day ' + day_num[1]] = image_list
 
-            stack_df = stack_df.append(mice_pictures)
-            stack_df = stack_df.reset_index(drop=True)
-            stack_df.dropna(axis='columns')
-            stack_df.dropna(axis='index')
-
-            self.new_data_to_enter = stack_df
-
-        except FileNotFoundError as file_not_found_msg:
-            print(file_not_found_msg, "\nPlease try to select the file manually\n")
-            self.excel_path = filedialog.askopenfilename(filetypes=[("Excel files", ".xlsx .xls .csv")])
-            self.get_new_data_to_enter()
+        # Add pictures dataframe to the whole dataframe
+        stack_df = stack_df.append(mice_pictures)
+        stack_df = stack_df.reset_index(drop=True)
+        stack_df.dropna(axis='columns')
+        stack_df.dropna(axis='index')
+        return stack_df
 
     def get_mice_name_list(self):
-        try:
-            for name in self.new_data_to_enter.loc[:, "Mice"]:
-                if name not in self.mice_names:
-                    self.mice_names.append(name)
-        except KeyError as key_error_msg:
-            print(key_error_msg)
-            exit(-1)
+        for name in self.new_data_to_enter.loc[:, "Mice"]:
+            if name not in self.mice_names:
+                self.mice_names.append(name)
 
     def add_mice(self):
         for mouse in self.mice_names:
-            self.enter_new_mouse(mouse_name=mouse, exp_name='exp1')
+            self.enter_new_mouse(mouse_name=mouse, exp_name='exp1')  # TODO: change exp name
 
     def enter_new_mouse(self, mouse_name, exp_name):
-
         # prepare mouse values
-        full_name = str(exp_name) + "_" + str(mouse_name)
         filtered_df = self.new_data_to_enter[self.new_data_to_enter['Mice'].str.contains(mouse_name)]
+        # TODO: add this sequence into for loop
         contraction = filtered_df[filtered_df['group'].str.contains('contraction')].drop(['group', 'Mice'], axis='columns')
         scab = filtered_df[filtered_df['group'].str.contains('Scab')].drop(['group', 'Mice'], axis='columns')
         wound_close = filtered_df[filtered_df['group'].str.contains('Wound close')].drop(['group', 'Mice'], axis='columns')
         size_in_pixels = filtered_df[filtered_df['group'].str.contains('Size by pixels')].drop(['group', 'Mice'], axis='columns')
         size_in_cm = filtered_df[filtered_df['group'].str.contains('Absolute size')].drop(['group', 'Mice'], axis='columns')
         pictures = filtered_df[filtered_df['group'].str.contains('pictures')].drop(['group', 'Mice'], axis='columns')
-        self.data = self.data.append({'Mouse': full_name}, ignore_index=True)
-        mouse_index = self.data[self.data['Mouse'] == full_name].index.to_numpy()[0]
+
+        full_name = str(exp_name) + "_" + str(mouse_name)
+        self.dataset = self.dataset.append({'Mouse': full_name}, ignore_index=True)
+        mouse_index = self.dataset[self.dataset['Mouse'] == full_name].index.to_numpy()[0]
 
         # enter mouse values to dataset
-        for day in contraction.columns:
+        for day in contraction.columns:  # TODO: check what are those weird ifs, try get into loop by columns
             day_num = day.split()[1]
+
             if contraction.empty is not True:
-                self.data.at[mouse_index, 'contraction_day' + day_num] = contraction.iloc[0][day]
+                self.dataset.at[mouse_index, 'contraction_day' + day_num] = contraction.iloc[0][day]
             if scab.empty is not True:
-                self.data.at[mouse_index, 'scab_day' + day_num] = scab.iloc[0][day]
+                self.dataset.at[mouse_index, 'scab_day' + day_num] = scab.iloc[0][day]
             if wound_close.empty is not True:
-                self.data.at[mouse_index, 'wound_close_day' + day_num] = wound_close.iloc[0][day]
+                self.dataset.at[mouse_index, 'wound_close_day' + day_num] = wound_close.iloc[0][day]
             if size_in_pixels.empty is not True:
-                self.data.at[mouse_index, 'size_in_pixels_day' + day_num] = size_in_pixels.iloc[0][day]
+                self.dataset.at[mouse_index, 'size_in_pixels_day' + day_num] = size_in_pixels.iloc[0][day]
             if size_in_cm.empty is not True:
-                self.data.at[mouse_index, 'size_in_cm_day' + day_num] = size_in_cm.iloc[0][day]
+                self.dataset.at[mouse_index, 'size_in_cm_day' + day_num] = size_in_cm.iloc[0][day]
             if pictures.empty is not True:
-                self.data.at[mouse_index, 'pictures_day' + day_num] = pictures.iloc[0][day]
+                self.dataset.at[mouse_index, 'pictures_day' + day_num] = pictures.iloc[0][day]
 
     def get_last_day(self, mouse_name, cur_day):
-        if cur_day is None: return None
-        last_day = cur_day - 1
-        try:
-            if mouse_name not in self.mice_names:
-                print("get_last_day: mouse name was not found in data set")
-                return None
-        except KeyError as key_error_msg:
-            print(key_error_msg)
-            exit(-1)
-        while last_day >= 0 :
-            mouse_index = self.data[self.data['Mouse'] == mouse_name].index.to_numpy()[0]
-            data = self.data.at[mouse_index, 'algo_size_in_pixels_day' + str(last_day)]
-            if data is not None: break
-            last_day = last_day - 1
-        if last_day < 0 :
-            print("get_last_day: no preliminary data found")
+        if cur_day is None:
             return None
+        if mouse_name not in self.mice_names:
+            print("Cant get last day mouse status - mouse name was not found in data set")
+            return None
+        if cur_day < 1:
+            print("Cant get last day mouse status - no preliminary data found")
+            return None
+
+        last_day = cur_day - 1
+        while last_day >= 0:
+            mouse_index = self.dataset[self.dataset['Mouse'] == mouse_name].index.to_numpy()[0]
+            data = self.dataset.at[mouse_index, 'algo_size_in_pixels_day' + str(last_day)]
+            if data is not None:
+                break
+            last_day = last_day - 1
+
         return last_day
 
     def get_pic_with_tag(self, mouse_name, day):
         pic = Picture()
         day = str(day)
-        try:
-            if mouse_name not in self.mice_names:
-                print("get_pic_with_tag: mouse name was not found in data set")
-                return None
-        except KeyError as key_error_msg:
-            print(key_error_msg)
-            exit(-1)
-        mouse_index = self.data[self.data['Mouse'] == mouse_name].index.to_numpy()[0]
+        if mouse_name not in self.mice_names:
+            print("get_pic_with_tag: mouse name was not found in data set")
+            return None
+        mouse_index = self.dataset[self.dataset['Mouse'] == mouse_name].index.to_numpy()[0]
         pic.mouse_name = mouse_name
         pic.day = day
-        pic.scab = self.data.at[mouse_index, 'scab_day' + day]
-        pic.contraction = self.data.at[mouse_index, 'contraction_day' + day]
-        pic.size_in_pixels = self.data.at[mouse_index, 'size_in_pixels_day' + day]
-        pic.algo_size_in_pixels = self.data.at[mouse_index, 'algo_size_in_pixels_day' + day]
-        pic.min_bounding_radius_in_pixels = self.data.at[mouse_index, 'min_bounding_radius_in_pixels_day' + day]
-        pic.size_in_cm = self.data.at[mouse_index, 'size_in_cm_day' + day]
-        pic.wound_close = self.data.at[mouse_index, 'wound_close_day' + day]
-        pic.pictures = self.data.at[mouse_index, 'pictures_day' + day]
+        pic.scab = self.dataset.at[mouse_index, 'scab_day' + day]
+        pic.contraction = self.dataset.at[mouse_index, 'contraction_day' + day]
+        pic.size_in_pixels = self.dataset.at[mouse_index, 'size_in_pixels_day' + day]
+        pic.algo_size_in_pixels = self.dataset.at[mouse_index, 'algo_size_in_pixels_day' + day]
+        pic.min_bounding_radius_in_pixels = self.dataset.at[mouse_index, 'min_bounding_radius_in_pixels_day' + day]
+        pic.size_in_cm = self.dataset.at[mouse_index, 'size_in_cm_day' + day]
+        pic.wound_close = self.dataset.at[mouse_index, 'wound_close_day' + day]
+        pic.pictures = self.dataset.at[mouse_index, 'pictures_day' + day]
         return pic
 
 
 def prepare_dataset(args):
-    data_generator = DataSet(path="/Users/regevazran1/Desktop/technion/semester i/project c/data/mouse batches/AWHA-1/AWHA-1.xlsx")  # FIXME Tomer i changed the path and the name of the exel file from example_exp to AWHA-1
-    data_generator.get_new_data_to_enter()
-    data_generator.get_mice_name_list()
-    data_generator.add_mice()
-    # print(data_generator.data.to_string())
-    # data_generator.dataset.at[0,'pictures_day0'][0].show()    # show picture example form the data set
-    # data_generator.dataset.to_csv(csv_path)
-    return data_generator
+    # Create dataset object
+    data_generator = DataSet(args)
+    # Get existing dataset
+    data_generator.get_dataset()
+    # Check if excel was given to update it
+    data_generator.update_dataset()
 
+    return data_generator
