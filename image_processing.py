@@ -421,8 +421,7 @@ class image_process_algo_master:
         # Apply adaptiveThreshold at the bitwise_not of gray, notice the ~ symbol
         img_not = cv2.bitwise_not(img)
         img = cv2.adaptiveThreshold(img_not, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2)
-        cv2.imshow("thresh",img)
-        cv2.waitKey(0)
+
         max_line_width = int(img.shape[0]*0.08)
         sum_list = []
         lines_idx = []
@@ -580,7 +579,18 @@ class image_process_algo_master:
         return
     # ---------------------------------------------------------------------
 
+    def set_wound_area_in_dataset(self):  # FIXME need to test
+        normalized_area = self.cur_wound_area*self.normaliz_factor
+        self.dataset.update_dataset(self.cur_mouse_name, self.cur_day, normalized_area, type="area")
+        return
+
+    def set_bound_circle_r_in_dataset(self): # FIXME need to test
+        normalized_radius = self.cur_bounding_radius*self.normaliz_factor
+        self.dataset.update_dataset(self.cur_mouse_name, self.cur_day, normalized_radius, type="radius")
+        return
+
     def get_last_wound_area(self):
+        if self.normaliz_factor is None: return None
         last_day = self.dataset.get_last_day(self.cur_mouse_name,self.cur_day)
         if last_day == None: return None
         pic = self.dataset.get_pic_with_tag(self.cur_mouse_name, last_day)
@@ -590,6 +600,7 @@ class image_process_algo_master:
             return pic.algo_size_in_pixels/self.normaliz_factor
 
     def get_last_bounding_radius(self):
+        if self.normaliz_factor is None: return None
         last_day = self.dataset.get_last_day(self.cur_mouse_name,self.cur_day)
         if last_day == None: return None
         pic = self.dataset.get_pic_with_tag(self.cur_mouse_name, last_day)
@@ -770,10 +781,9 @@ class image_process_algo_master:
             self.cut_frame_by_wound(bounding_r=last_bound_circle_r) # bounding_r: the radius that was used in the last iteration
             bound_circle_r, wound_area = self.segment_wound()
             last_bound_circle_r = int(self.last_bounding_radius * 0.9)  # decries radius for next iteration
-        self.last_bounding_radius = bound_circle_r
-        self.wound_area = wound_area
+        self.cur_bounding_radius = bound_circle_r
+        self.cur_wound_area = wound_area
 
-        #FIXME need to implement
-        # self.set_wound_area_in_dataset
-        # self.set_bound_circle_r_in_dataset
+        self.set_wound_area_in_dataset()
+        self.set_bound_circle_r_in_dataset()
 
