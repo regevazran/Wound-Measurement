@@ -170,7 +170,7 @@ class DataSet:
                     # Take only pictures
                     if not image.lower().endswith(('.png', '.jpg', '.jpeg', '.tiff', '.bmp', '.gif')):
                         continue
-                    image_list.append(Image.open(root + '/' + image))
+                    image_list.append(root + '/' + image) # FIXME: tomer ask me and ill explain the reason for the change
                 mice_pictures.at[mouse_index, 'Day ' + day_num[1]] = image_list
 
         # Add pictures dataframe to the whole dataframe
@@ -239,7 +239,8 @@ class DataSet:
     def get_last_day(self, mouse_name, cur_day):
         if cur_day is None:
             return None
-        if mouse_name not in self.mice_names:
+        mice_names = self.dataset['Mouse'].tolist()
+        if mouse_name not in mice_names:
             print("Cant get last day mouse status - mouse name was not found in data set")
             return None
         if cur_day < 1:
@@ -250,7 +251,7 @@ class DataSet:
         while last_day >= 0:
             mouse_index = self.dataset[self.dataset['Mouse'] == mouse_name].index.to_numpy()[0]
             data = self.dataset.at[mouse_index, 'algo_size_in_pixels_day' + str(last_day)]
-            if data is not None:
+            if pd.notna(data):
                 break
             last_day = last_day - 1
 
@@ -259,8 +260,10 @@ class DataSet:
     def get_pic_with_tag(self, mouse_name, day):
         pic = Picture()
         day = str(day)
-        if mouse_name not in self.mice_names:
-            print("get_pic_with_tag: mouse name was not found in data set")
+        mice_names = self.dataset['Mouse'].tolist()
+        if mouse_name not in mice_names:
+            print("get_pic_with_tag: mouse name:",mouse_name," was not found in data set")
+            print("mice names:",mice_names)
             return None
         mouse_index = self.dataset[self.dataset['Mouse'] == mouse_name].index.to_numpy()[0]
         pic.mouse_name = mouse_name
@@ -272,7 +275,13 @@ class DataSet:
         pic.min_bounding_radius_in_pixels = self.dataset.at[mouse_index, 'min_bounding_radius_in_pixels_day' + day]
         pic.size_in_cm = self.dataset.at[mouse_index, 'size_in_cm_day' + day]
         pic.wound_close = self.dataset.at[mouse_index, 'wound_close_day' + day]
-        pic.pictures = self.dataset.at[mouse_index, 'pictures_day' + day]
+
+        picture_path_list = self.dataset.at[mouse_index, 'pictures_day' + day]
+        if not isinstance(picture_path_list, list):
+            picture_path_list = picture_path_list.strip("[]")
+            picture_path_list = picture_path_list.replace("'", "")
+            picture_path_list = picture_path_list.split(", ")
+        pic.pictures = picture_path_list
         return pic
 
     def update_mouse_in_dataset(self, mouse_name, day, data_value, type="radius"):  # data_type options: ("radius", "area") # FIXME need to test
@@ -285,20 +294,33 @@ class DataSet:
             print("regev_update_dataset_merge_to_mine: invalid data type")
             return
 
-        if mouse_name in self.mice_names:
+        mice_names = self.dataset['Mouse'].tolist()
+        if mouse_name in mice_names:
             mouse_index = self.dataset[self.dataset['Mouse'] == mouse_name].index.to_numpy()[0]
         else:
-            print("regev_update_dataset_merge_to_mine: mouse name was not found in data set")
+            print("regev_update_dataset_merge_to_mine: mouse_name:",mouse_name,"was not found in data set")
+            print("mice names:",mice_names)
             return None
 
-        cur_dataset_value = self.dataset.at[
-            mouse_index, data_type]  # dataset value is a list in a form of [avg value,value weight]
+        cur_dataset_value = self.dataset.at[mouse_index, data_type]  # dataset value is a list in a form of [avg value,value weight]
 
         # set new value
-        size = 0 if cur_dataset_value is None else cur_dataset_value[0]
-        weight = 1 if cur_dataset_value is None else cur_dataset_value[1] + 1
+        if pd.notna(cur_dataset_value):
+            cur_dataset_value = cur_dataset_value.split()
+            size = cur_dataset_value[1]
+            weight = cur_dataset_value[3]
+        else:
+            size = 0
+            weight = 0
 
-        self.dataset.at[mouse_index, data_type] = [(size + data_value) / weight, weight]
+        weight = weight + 1
+        size = (size + data_value) / (weight)
+        new_dataset_value = str('avgSize: ') + str(size) + str(' weight: ') + str(weight)
+
+        self.dataset.loc[mouse_index, data_type] = new_dataset_value
+        # save changes in file
+        self.save_dataset_to_file()
+        print("update_mouse_in_dataset: updated dataSet")
         return
 
     def check_day_number(self):
@@ -308,7 +330,8 @@ class DataSet:
     def check_if_in_dataset(self):
         for i in range(len(self.dataset['Mouse'])):
             if self.mouse_name == self.dataset['Mouse'][i]:
-                if not pd.isna(self.dataset[f'pictures_day{self.day}'][i]):
+                picture_list = self.dataset[f'pictures_day{self.day}'][i]
+                if isinstance(picture_list, list) or pd.notna(picture_list): # FIXME: tomer ask me and ill explain the reason for the change
                     print("all is good")
                     return
                 else:

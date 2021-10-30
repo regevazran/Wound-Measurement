@@ -1,5 +1,5 @@
 import math
-
+from PIL import Image
 import cv2
 import numpy as np
 from scipy.spatial import distance
@@ -396,19 +396,54 @@ class image_process_algo_master:
         print("ransacH",len(bestP2), len(bestP1))
         bestH , _ =  cv2.findHomography(bestP1, bestP2)
         return bestH , bestP1, bestP2
+    def filterOutBadMatches(self,im1, im2, kp1, kp2, matches, R, ShowMatches=False):
+        goodMatches = []
+        for p1, p2 in matches:
+            if p1.distance < R * p2.distance:
+                goodMatches.append([p1])
+        p1, p2 = [], []
+        for match in goodMatches:
+            p1.append(kp1[match[0].queryIdx].pt)
+            p2.append(kp2[match[0].trainIdx].pt)
+
+        if ShowMatches:
+            img3 = cv2.drawMatchesKnn(im1, kp1, im2, kp2, goodMatches, None, flags=2)
+            cv2.startWindowThread()
+            cv2.imshow("matches", img3)
+            key = cv2.waitKey(0)
+            cv2.destroyAllWindows()
+            key = cv2.waitKey(1)
+
+        p1, p2 = np.array(p1), np.array(p2)
+        return p1, p2
+    def getPointsSift(self,im1, im2, ShowMatches=False):
+        im1 = cv2.cvtColor(im1, cv2.COLOR_RGB2BGR)
+        im2 = cv2.cvtColor(im2, cv2.COLOR_RGB2BGR)
+        sift = cv2.SIFT_create()
+        kp1, des1 = sift.detectAndCompute(im1, None)
+        kp2, des2 = sift.detectAndCompute(im2, None)
+        bf = cv2.BFMatcher()
+        matches = bf.knnMatch(des1, des2, k=2)
+        print("getPointsSift: num of matches is: ",len(matches))
+        R = 0.4
+        p1, p2 = self.filterOutBadMatches(im1, im2, kp1, kp2, matches, R, ShowMatches)
+        print("getPointsSift: num of filterde matches is: ",len(p1))
+        return p1, p2
 
     # ----------------- get normalization factor --------------------------
-    def dist_between_squares(self, img, ShowLines=False, imgName="template"):
+    def dist_between_squares(self, img, ShowLines=False, imgName="template"):  # FIXME not good enough
         lines_position = self.find_horz_lines(img)
         lines_position.sort()
         dist1 = lines_position[2] - lines_position[1]
         dist2 = lines_position[1] - lines_position[0]
-        if abs(dist2-dist1) > 100: avg_dist = max(dist1, dist2)
+        if max(dist2,dist1)/min(dist2,dist1) > 1.2: avg_dist = max(dist1, dist2)
         else: avg_dist = (dist1 + dist2)/2
-        print(dist1,dist2)
         if ShowLines:
             if len(img.shape) != 2: img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             for line in lines_position: img[line] = 0
+            print("dist_between_squares: dist1=",dist1,"dist2=", dist2)
+            print("dist_between_squares: avg dist=",avg_dist)
+
             cv2.imshow(imgName,img)
             cv2.waitKey(0)
         return avg_dist
@@ -476,41 +511,6 @@ class image_process_algo_master:
         avg_ratio = sum(dist_list) / len(dist_list)
         return avg_ratio
 
-    def filterOutBadMatches(self,im1, im2, kp1, kp2, matches, R, ShowMatches=False):
-        goodMatches = []
-        for p1, p2 in matches:
-            if p1.distance < R * p2.distance:
-                goodMatches.append([p1])
-        p1, p2 = [], []
-        for match in goodMatches:
-            p1.append(kp1[match[0].queryIdx].pt)
-            p2.append(kp2[match[0].trainIdx].pt)
-
-        if ShowMatches:
-            img3 = cv2.drawMatchesKnn(im1, kp1, im2, kp2, goodMatches, None, flags=2)
-            cv2.startWindowThread()
-            cv2.imshow("matches", img3)
-            key = cv2.waitKey(0)
-            cv2.destroyAllWindows()
-            key = cv2.waitKey(1)
-
-        p1, p2 = np.array(p1), np.array(p2)
-        return p1, p2
-
-    def getPointsSift(self,im1, im2, ShowMatches=False):
-        im1 = cv2.cvtColor(im1, cv2.COLOR_RGB2BGR)
-        im2 = cv2.cvtColor(im2, cv2.COLOR_RGB2BGR)
-        sift = cv2.SIFT_create()
-        kp1, des1 = sift.detectAndCompute(im1, None)
-        kp2, des2 = sift.detectAndCompute(im2, None)
-        bf = cv2.BFMatcher()
-        matches = bf.knnMatch(des1, des2, k=2)
-        print("getPointsSift: num of matches is: ",len(matches))
-        R = 0.4
-        p1, p2 = self.filterOutBadMatches(im1, im2, kp1, kp2, matches, R, ShowMatches)
-        print("getPointsSift: num of filterde matches is: ",len(p1))
-        return p1, p2
-
     def template_match(self, img, template, ShowMatches=False):
         def show_match(loc,title):
             bottom_right = (loc[0] + w, loc[1] + h)
@@ -530,8 +530,7 @@ class image_process_algo_master:
                     best_count = count
             return best
         print("start template match")
-        # img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        # template = cv2.cvtColor(template,cv2.COLOR_BGR2GRAY)
+
 
         h, w = template.shape[0], template.shape[1]
         methods = [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED, cv2.TM_CCOEFF_NORMED, cv2.TM_CCOEFF, cv2.TM_CCORR_NORMED, cv2.TM_CCORR]
@@ -550,6 +549,7 @@ class image_process_algo_master:
         if ShowMatches:
             img2 = img.copy()
             show_match(best_match,"best")
+        print("finished template match")
         return img[best_match[1]:best_match[1] + w, best_match[0]:best_match[0]+ h]
 
     def get_normaliz_factor(self, ShowLines=False, ShowTransformImg=False, ShowTemplateMatch=False):
@@ -569,7 +569,7 @@ class image_process_algo_master:
         normalize_factor = template_dist/target_dist
 
         if ShowTransformImg:
-            print(normalize_factor)
+            print("get_normaliz_factor: normalize_factor=",normalize_factor)
             target_warp = cv2.resize(target,(int(target.shape[1] * normalize_factor), int(target.shape[0] * normalize_factor)))
             cv2.imshow("warp image",target_warp)
             cv2.imshow("target",target)
@@ -581,12 +581,12 @@ class image_process_algo_master:
 
     def set_wound_area_in_dataset(self):  # FIXME need to test
         normalized_area = self.cur_wound_area*self.normaliz_factor
-        self.dataset.update_dataset(self.cur_mouse_name, self.cur_day, normalized_area, type="area")
+        self.dataset.update_mouse_in_dataset(self.cur_mouse_name, self.cur_day, normalized_area, type="area")
         return
 
     def set_bound_circle_r_in_dataset(self): # FIXME need to test
         normalized_radius = self.cur_bounding_radius*self.normaliz_factor
-        self.dataset.update_dataset(self.cur_mouse_name, self.cur_day, normalized_radius, type="radius")
+        self.dataset.update_mouse_in_dataset(self.cur_mouse_name, self.cur_day, normalized_radius, type="radius")
         return
 
     def get_last_wound_area(self):
@@ -707,18 +707,17 @@ class image_process_algo_master:
         old_rect_width = self.wound_rect[1][0]-self.wound_rect[0][0]
         old_rect_hight = self.wound_rect[1][1]-self.wound_rect[0][1]
         rect_center = (self.wound_rect[0][0]+int(old_rect_width/2),self.wound_rect[0][1]+int(old_rect_hight/2))
-        if bounding_r is not None: last_bounding_radius = bounding_r
-        else: last_bounding_radius = self.get_last_bounding_radius()
-        if last_bounding_radius:
-            new_rect_size = last_bounding_radius*2
+
+        if bounding_r:
+            new_rect_size = bounding_r*2
         else:
             new_rect_size = max(old_rect_width,old_rect_hight)
         new_rect = [[rect_center[0] - int(new_rect_size/2),rect_center[1]- int(new_rect_size/2)],[rect_center[0] + int(new_rect_size/2),rect_center[1] + int(new_rect_size/2)]]
         # set the min square that contain the wound as the new wound rect
         self.wound_rect = new_rect
         self.wound_rect_size = new_rect_size
-        self.last_bounding_radius = last_bounding_radius
-        print("set_square_from_yolo_output: use r= ",last_bounding_radius)
+        self.last_bounding_radius = bounding_r
+        print("set_square_from_yolo_output: use r= ",bounding_r)
 
     def get_rectangle(self):
         yolov5_detection = self.yolo.run(self.cur_frame)
@@ -747,7 +746,7 @@ class image_process_algo_master:
         contours, _ = cv2.findContours(wound_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         center_contour = self.find_center_contour(contours)
         wound_area = cv2.contourArea(center_contour)
-        print("wound area is: ",wound_area)
+        print("segment_wound: wound area is=",wound_area)
         only_wound_to_show = self.only_wound.copy()
         cv2.drawContours(only_wound_to_show, [center_contour], -1, (255, 0, 0), 2)
         cv2.imshow("segmented wound",only_wound_to_show)
@@ -757,20 +756,21 @@ class image_process_algo_master:
         cv2.destroyAllWindows()
         return circle_r, wound_area
 
-    def get_wound_segmentation(self, frame=None, exp_name=None, mouse_name=None, day=None):
+    def get_wound_segmentation(self, mouse_full_name=None, day=None):
         path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/bounding circle exp/day0.jpg"
-        if frame is None: frame = cv2.imread(path)
+
+        pics = self.dataset.get_pic_with_tag(mouse_full_name,day)
+        if pics is None: return
+        pics = pics.pictures
+        frame = cv2.imread(pics[1])
 
         # preper data for frame segmentation
         self.cur_frame = frame
-        full_name = str(exp_name) + "_" + str(mouse_name)
-        self.cur_mouse_name = full_name
+        self.cur_mouse_name = mouse_full_name
         self.cur_day = day
         self.get_normaliz_factor(ShowLines=True, ShowTransformImg=True, ShowTemplateMatch=False)
-        last_bound_circle_r = None
-        # last_bound_circle_r = 65  # FIXME delete!!!!
+        last_bound_circle_r = self.get_last_bounding_radius()
         last_wound_area = self.get_last_wound_area()
-        # last_wound_area = 5877  # FIXME delete!!!!
         wound_area = None
 
         # start segmentation algorithm
@@ -781,6 +781,7 @@ class image_process_algo_master:
             self.cut_frame_by_wound(bounding_r=last_bound_circle_r) # bounding_r: the radius that was used in the last iteration
             bound_circle_r, wound_area = self.segment_wound()
             last_bound_circle_r = int(self.last_bounding_radius * 0.9)  # decries radius for next iteration
+            if last_wound_area is None: break
         self.cur_bounding_radius = bound_circle_r
         self.cur_wound_area = wound_area
 

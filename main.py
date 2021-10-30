@@ -7,8 +7,8 @@ dataset_path = ""
 excel_path = ""
 
 # Regev, do not overwrite this path - add your own if you want to below it.
-# excel_path = "C:/Users/tomer/OneDrive/שולחן העבודה/Technion/Project B/data/mouse batches/AWHA-1/AWHA-1.xlsx"
-# dataset_path = "C:/Users/tomer/OneDrive/שולחן העבודה/Technion/Project B/data/wound_measurement_dataset.csv"
+# excel_path = "/Users/regevazran1/Desktop/technion/semester i/project c/data/mouse batches/AWHA-1/AWHA-1.xlsx"
+# dataset_path = "wound_measurement_dataset.csv"
 
 
 def parse_arguments():
