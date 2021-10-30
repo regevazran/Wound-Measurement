@@ -1,7 +1,7 @@
 import tkinter.messagebox
-
-from PIL import Image
 from tkinter.messagebox import askyesno
+from PIL import Image
+from easygui import *
 import pandas as pd
 import ntpath
 import cv2
@@ -29,6 +29,16 @@ class Picture:
 def directories_hierarchy_error():
     cv2.imshow("Hierarchy", cv2.imread("DirectoriesHierarchy.jpg"))
     cv2.waitKey(0)
+    exit(-1)
+
+
+def error_in_mouse_input(error):
+    error_msg = {'dataset': "Mouse name or day given is not in existing dataset!",
+                 'name_exp': 'Mouse name given is not in the right experiment name format!\nAWHA<X>_P<X>',
+                 'name_p': 'Mouse name given is not in the right P - name format!\nAWHA<X>_P<X>',
+                 'format': 'Mouse name given is not in the right format!\nAWHA<X>_P<X>',
+                 'day': 'Day given was either below the 0 or above 10!'}[error]
+    print(error_msg)
     exit(-1)
 
 
@@ -290,6 +300,60 @@ class DataSet:
 
         self.dataset.at[mouse_index, data_type] = [(size + data_value) / weight, weight]
         return
+
+    def check_day_number(self):
+        if self.day < 0 or self.day > 10:
+            error_in_mouse_input('day')
+
+    def check_if_in_dataset(self):
+        for i in range(len(self.dataset['Mouse'])):
+            if self.mouse_name == self.dataset['Mouse'][i]:
+                if not pd.isna(self.dataset[f'pictures_day{self.day}'][i]):
+                    print("all is good")
+                    return
+                else:
+                    break
+        error_in_mouse_input("dataset")
+
+    def check_format(self):
+        split_name = self.mouse_name.split("_")
+        if len(split_name) != 2:
+            error_in_mouse_input("format")
+        if "AWHA" not in split_name[0] or not split_name[0][-1].isdigit():
+            error_in_mouse_input("name_exp")
+        if "P" not in split_name[1] or not split_name[1][-1].isdigit():
+            error_in_mouse_input("name_p")
+
+    def get_day_from_user(self):
+        day = enterbox("Get day to measure", "Get Day")
+        self.day = day
+
+    def get_mouse_name_from_user(self):
+        exp_name = enterbox("Get Experiment Name", "Get Mouse Name", "AWHA")
+        mouse_name = enterbox("Get Mouse Name", "Get Mouse Name", "P")
+        self.mouse_name = str(exp_name) + "_" + str(mouse_name)
+
+    def check_input(self):
+        print(f'Checking mouse name given {self.mouse_name} - day {self.day}')
+        self.check_format()
+        self.check_day_number()
+        self.check_if_in_dataset()
+
+    def get_mouse_data(self):
+        # Check if there was a mouse name argument:
+        if self.args.mouse:
+            self.mouse_name = self.args.mouse
+        else:
+            self.get_mouse_name_from_user()
+
+        if self.args.day >= 0:
+            self.day = self.args.day
+        else:
+            self.get_day_from_user()
+
+        self.check_input()
+
+        return self.mouse_name, self.day
 
 
 def prepare_dataset(args):

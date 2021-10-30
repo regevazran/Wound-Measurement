@@ -13,20 +13,24 @@ excel_path = ""
 
 def parse_arguments():
     parser = argparse.ArgumentParser(prog="Wound Measurement", description="Starting Wound Measurement Main App!")
-    parser.add_argument('-d', '--dataset', type=str, default="MouseDataSet.csv",
+    parser.add_argument('--dataset', type=str, default="MouseDataSet.csv",
                         help='Data set location')
     parser.add_argument('-a', '--add-excel', type=str, default="",
                         help='Add new excel to existing data-set')
+    parser.add_argument('-m', '--mouse', type=str, default="",
+                        help='Start algorithm on specific mouse given.\nUsage: AWHA<X>_P<X>')
+    parser.add_argument('-d', '--day', type=int, default=-1,
+                        help='Start algorithm on specific day given.\nUsage: <positive int from 0 to 10>')
     parser.add_argument('-ty', '--test-yolo', action='store_true')
     return parser.parse_args()
 
 
 def main():
     dataset = prepare_dataset(args)
-
-    # image_process_algo = ImageProcessAlgoMaster(dataset)
+    mouse_to_segment, day = dataset.get_mouse_data()
     image_pr = image_processing.image_process_algo_master(dataset)
-    image_pr.get_wound_segmentation()
+    # TODO: move those mouse to segment and day values to get wound segmentation function correctly!
+    image_pr.get_wound_segmentation(mouse_to_segment, day)
 
 
 if __name__ == '__main__':
