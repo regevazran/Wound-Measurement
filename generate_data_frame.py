@@ -1,3 +1,5 @@
+import tkinter.messagebox
+
 from PIL import Image
 from tkinter.messagebox import askyesno
 import pandas as pd
@@ -69,6 +71,8 @@ class DataSet:
         self.dataset = pd.DataFrame(columns=columns)
 
     def update_dataset(self):
+        if not self.excel_path:
+            return
         if os.path.isfile(self.excel_path):
             if self.excel_path.split(".")[-1] == 'xlsx' or self.excel_path.split(".")[-1] == 'xls':
                 self.get_new_data_to_enter()
@@ -83,7 +87,7 @@ class DataSet:
         self.save_dataset_to_file()
 
     def save_dataset_to_file(self):
-        self.dataset.to_csv("MouseDataSet.csv")
+        self.dataset.to_csv("MouseDataSet.csv", index=False)
 
     def get_new_data_to_enter(self):
         self.get_exp_name()
@@ -141,8 +145,7 @@ class DataSet:
         for mouse in mice_dir_list:
             mouse_name = ''.join(mouse.split(sep="-"))
             if mouse_name not in mice_list:
-                print(f"Mouse {mouse_name} is not in the same folder as the excel given!")
-                # TODO: add error message
+                tkinter.messagebox.showerror("Cant find mouse images", f"Mouse {mouse_name} is not in the same folder as the excel given!")
                 directories_hierarchy_error()
             mice_pictures = mice_pictures.append({'group': 'pictures', 'Mice': mouse_name}, ignore_index=True)
             mouse_index = mice_pictures[mice_pictures['Mice'] == mouse_name].index.to_numpy()[0]
@@ -174,7 +177,7 @@ class DataSet:
 
     def add_mice_to_dataset(self):
         for mouse in self.mice_names:
-            self.enter_new_mouse(mouse_name=mouse, exp_name=self.exp_name)  # TODO: change exp name
+            self.enter_new_mouse(mouse_name=mouse, exp_name=self.exp_name)
 
     def enter_new_mouse(self, mouse_name, exp_name):
         # prepare mouse values
@@ -187,16 +190,17 @@ class DataSet:
         size_in_cm = filtered_df[filtered_df['group'].str.contains('Absolute size')].drop(['group', 'Mice'], axis='columns')
         pictures = filtered_df[filtered_df['group'].str.contains('pictures')].drop(['group', 'Mice'], axis='columns')
 
-        full_name = str(exp_name) + "_" + str(mouse_name)
+        mouse_name_to_add = str(exp_name) + "_" + str(mouse_name)
         for i in range(len(self.dataset['Mouse'])):
-            if full_name == self.dataset['Mouse'][i]:
-                print("Mouse already exist in dataset!")
-                if not askyesno("Mouse already exist in dataset!", f"Mouse {full_name} already exist in dataset!\nDo you want to overwrite?"):
+            if mouse_name_to_add == self.dataset['Mouse'][i]:
+                if not askyesno("Mouse already exist in dataset!", f"Mouse {mouse_name_to_add} already exist in dataset!\nDo you want to overwrite?"):
                     return
-        # TODO: if overwrite, make it work
+                else:
+                    self.remove_old_mouse(mouse_name_to_add)
+                    break
 
-        self.dataset = self.dataset.append({'Mouse': full_name}, ignore_index=True)
-        mouse_index = self.dataset[self.dataset['Mouse'] == full_name].index.to_numpy()[0]
+        self.dataset = self.dataset.append({'Mouse': mouse_name_to_add}, ignore_index=True)
+        mouse_index = self.dataset[self.dataset['Mouse'] == mouse_name_to_add].index.to_numpy()[0]
 
         # enter mouse values to dataset
         for day in contraction.columns:  # TODO: check what are those weird ifs, try get into loop by columns
@@ -214,6 +218,13 @@ class DataSet:
                 self.dataset.at[mouse_index, 'size_in_cm_day' + day_num] = size_in_cm.iloc[0][day]
             if pictures.empty is not True:
                 self.dataset.at[mouse_index, 'pictures_day' + day_num] = pictures.iloc[0][day]
+
+    def remove_old_mouse(self, mouse_name):
+        index = self.dataset.index
+        condition = self.dataset["Mouse"] == mouse_name
+        mice_indices = index[condition]
+        mice_indices_list = mice_indices.tolist()
+        self.dataset = self.dataset.drop(mice_indices_list, axis=0)
 
     def get_last_day(self, mouse_name, cur_day):
         if cur_day is None:
@@ -289,5 +300,4 @@ def prepare_dataset(args):
     # Check if excel was given to update it
     data_generator.update_dataset()
 
-    exit(0)
     return data_generator
