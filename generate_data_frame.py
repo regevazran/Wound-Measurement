@@ -1,6 +1,8 @@
 from PIL import Image
+from tkinter.messagebox import askyesno
 import pandas as pd
 import ntpath
+import cv2
 import os
 
 sheet_names = ['Contraction', 'Scab', 'Wound close', 'Size by pixels', 'Absolute size']
@@ -19,6 +21,13 @@ class Picture:
         self.size_in_cm = None
         self.wound_close = None
         self.pictures = []
+        self.dataset_name = "MouseDataSet.csv"
+
+
+def directories_hierarchy_error():
+    cv2.imshow("Hierarchy", cv2.imread("DirectoriesHierarchy.jpg"))
+    cv2.waitKey(0)
+    exit(-1)
 
 
 class DataSet:
@@ -29,12 +38,13 @@ class DataSet:
         self.dataset = None
         self.new_data_to_enter = None
         self.mice_names = []
+        self.exp_name = ""
 
     def get_dataset(self):
         if self.dataset_path:
             if os.path.isfile(self.dataset_path):
                 if self.dataset_path.split(".")[-1] == 'csv':
-                    self.dataset = pd.read_csv(self.dataset_path).fillna(-1)
+                    self.dataset = pd.read_csv(self.dataset_path)
                     print(f"Loaded existing dataset! {self.dataset_path.split('/')[-1]}")
                     return
                 else:
@@ -43,6 +53,11 @@ class DataSet:
                 print(f"The dataset path given does not exist!\nPath is: {self.dataset_path}")
         else:
             print(f"No dataset path was given by the user.")
+
+        if self.excel_path == "":
+            print(f"Neither Excel nor Dataset was given by the user!")
+            exit(-1)
+
         self.create_new_dataframe()
 
     def create_new_dataframe(self):
@@ -54,27 +69,41 @@ class DataSet:
         self.dataset = pd.DataFrame(columns=columns)
 
     def update_dataset(self):
-        if self.excel_path:
-            if os.path.isfile(self.excel_path):
-                if self.excel_path.split(".")[-1] == 'xlsx' or self.excel_path.split(".")[-1] == 'xls':
-                    self.get_new_data_to_enter()
-                else:
-                    print(f"The excel path given is not an excel file!\nPath is: {self.excel_path}")
+        if os.path.isfile(self.excel_path):
+            if self.excel_path.split(".")[-1] == 'xlsx' or self.excel_path.split(".")[-1] == 'xls':
+                self.get_new_data_to_enter()
             else:
-                print(f"The excel path given does not exist!\nPath is: {self.excel_path}")
+                print(f"The excel path given is not an excel file!\nPath is: {self.excel_path}")
+                return
         else:
-            print(f"No Excel path was given by the user.")
-        if self.new_data_to_enter:
-            self.get_mice_name_list()
-            self.add_mice()
-            # TODO: find a way to add this data to the existing csv
-            self.dataset.at[0, 'pictures_day0'][0].show()    # show picture example form the data set
-            self.dataset.to_csv("new_path.csv")  # TODO: change new dataset name
+            print(f"The excel path given does not exist!\nPath is: {self.excel_path}")
+            return
+        self.get_mice_name_list()
+        self.add_mice_to_dataset()
+        self.save_dataset_to_file()
+
+    def save_dataset_to_file(self):
+        self.dataset.to_csv("MouseDataSet.csv")
 
     def get_new_data_to_enter(self):
+        self.get_exp_name()
         stack_df = self.get_raw_data_from_excel()
         stack_df = self.get_pictures_data(stack_df)
         self.new_data_to_enter = stack_df
+
+    def get_exp_name(self):
+        split_path = self.excel_path.split("/")
+        exp_name = ""
+        for path in split_path:
+            if "AWHA" in path:
+                exp_name = path
+                break
+        if not exp_name:
+            print("Cant get experiment name out of excel path!")
+            exit(-1)
+        exp_name = exp_name.replace("-", "")
+        print(f"Found experiment name as: {exp_name}")
+        self.exp_name = exp_name
 
     def get_raw_data_from_excel(self):
         # extract sheets from excel
@@ -100,7 +129,6 @@ class DataSet:
                 if col[0] != 'Day' or not 0 <= int(col[1]) <= 10:
                     print("incorrect columns name in excel sheets:", col, "is not a valid column")
                     exit(-1)
-
         return stack_df
 
     def get_pictures_data(self, stack_df):
@@ -113,8 +141,9 @@ class DataSet:
         for mouse in mice_dir_list:
             mouse_name = ''.join(mouse.split(sep="-"))
             if mouse_name not in mice_list:
-                print("mouse name: ", mouse, " is not in excel file.\n check mouse in directory tree match mice in excel")
-                exit(-1)
+                print(f"Mouse {mouse_name} is not in the same folder as the excel given!")
+                # TODO: add error message
+                directories_hierarchy_error()
             mice_pictures = mice_pictures.append({'group': 'pictures', 'Mice': mouse_name}, ignore_index=True)
             mouse_index = mice_pictures[mice_pictures['Mice'] == mouse_name].index.to_numpy()[0]
 
@@ -143,9 +172,9 @@ class DataSet:
             if name not in self.mice_names:
                 self.mice_names.append(name)
 
-    def add_mice(self):
+    def add_mice_to_dataset(self):
         for mouse in self.mice_names:
-            self.enter_new_mouse(mouse_name=mouse, exp_name='exp1')  # TODO: change exp name
+            self.enter_new_mouse(mouse_name=mouse, exp_name=self.exp_name)  # TODO: change exp name
 
     def enter_new_mouse(self, mouse_name, exp_name):
         # prepare mouse values
@@ -159,6 +188,13 @@ class DataSet:
         pictures = filtered_df[filtered_df['group'].str.contains('pictures')].drop(['group', 'Mice'], axis='columns')
 
         full_name = str(exp_name) + "_" + str(mouse_name)
+        for i in range(len(self.dataset['Mouse'])):
+            if full_name == self.dataset['Mouse'][i]:
+                print("Mouse already exist in dataset!")
+                if not askyesno("Mouse already exist in dataset!", f"Mouse {full_name} already exist in dataset!\nDo you want to overwrite?"):
+                    return
+        # TODO: if overwrite, make it work
+
         self.dataset = self.dataset.append({'Mouse': full_name}, ignore_index=True)
         mouse_index = self.dataset[self.dataset['Mouse'] == full_name].index.to_numpy()[0]
 
@@ -253,4 +289,5 @@ def prepare_dataset(args):
     # Check if excel was given to update it
     data_generator.update_dataset()
 
+    exit(0)
     return data_generator

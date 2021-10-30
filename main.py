@@ -13,7 +13,7 @@ excel_path = ""
 
 def parse_arguments():
     parser = argparse.ArgumentParser(prog="Wound Measurement", description="Starting Wound Measurement Main App!")
-    parser.add_argument('-d', '--dataset', type=str, default="",
+    parser.add_argument('-d', '--dataset', type=str, default="MouseDataSet.csv",
                         help='Data set location')
     parser.add_argument('-a', '--add-excel', type=str, default="",
                         help='Add new excel to existing data-set')
