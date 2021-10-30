@@ -326,7 +326,7 @@ class DataSet:
 
     def get_day_from_user(self):
         day = enterbox("Get day to measure", "Get Day")
-        self.day = day
+        self.day = int(day)
 
     def get_mouse_name_from_user(self):
         exp_name = enterbox("Get Experiment Name", "Get Mouse Name", "AWHA")
