@@ -85,6 +85,7 @@ class DataSet:
             return
         if os.path.isfile(self.excel_path):
             if self.excel_path.split(".")[-1] == 'xlsx' or self.excel_path.split(".")[-1] == 'xls':
+                print("Getting new data out of excel")
                 self.get_new_data_to_enter()
             else:
                 print(f"The excel path given is not an excel file!\nPath is: {self.excel_path}")
@@ -106,7 +107,7 @@ class DataSet:
         self.new_data_to_enter = stack_df
 
     def get_exp_name(self):
-        split_path = self.excel_path.split("/")
+        split_path = self.excel_path.split("/" if "/" in self.excel_path else "\\")
         exp_name = ""
         for path in split_path:
             if "AWHA" in path:
@@ -187,6 +188,7 @@ class DataSet:
 
     def add_mice_to_dataset(self):
         for mouse in self.mice_names:
+            print(f"Adding mouse to dataset - {self.exp_name}_{mouse}")
             self.enter_new_mouse(mouse_name=mouse, exp_name=self.exp_name)
 
     def enter_new_mouse(self, mouse_name, exp_name):

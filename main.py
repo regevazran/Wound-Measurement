@@ -29,7 +29,6 @@ def main():
     dataset = prepare_dataset(args)
     mouse_to_segment, day = dataset.get_mouse_data()
     image_pr = image_processing.image_process_algo_master(dataset)
-    # TODO: move those mouse to segment and day values to get wound segmentation function correctly!
     image_pr.get_wound_segmentation(mouse_to_segment, day)
 
 

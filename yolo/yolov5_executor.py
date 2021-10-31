@@ -13,8 +13,8 @@ def show_image(image_copy, detection):
     cv2.putText(image_copy, text=str(detection['class'] + str(detection['confidence'])),
                 org=(detection['x0'], detection['y0'] - 20), fontFace=cv2.FONT_HERSHEY_SIMPLEX,
                 fontScale=2, color=(255, 0, 0), thickness=3)
-    img = cv2.cvtColor(image_copy, cv2.COLOR_RGB2BGR)
-    img = cv2.resize(img, (int(img.shape[1] * 0.3), int(img.shape[0] * 0.3)))
+    # img = cv2.cvtColor(image_copy, cv2.COLOR_RGB2BGR)
+    img = cv2.resize(image_copy, (int(image_copy.shape[1] * 0.3), int(image_copy.shape[0] * 0.3)))
     cv2.imshow("img", img)
     cv2.waitKey(0)
 

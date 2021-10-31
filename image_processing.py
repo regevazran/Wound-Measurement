@@ -531,7 +531,6 @@ class image_process_algo_master:
             return best
         print("start template match")
 
-
         h, w = template.shape[0], template.shape[1]
         methods = [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED, cv2.TM_CCOEFF_NORMED, cv2.TM_CCOEFF, cv2.TM_CCORR_NORMED, cv2.TM_CCORR]
         locations = []
@@ -554,12 +553,10 @@ class image_process_algo_master:
 
     def get_normaliz_factor(self, ShowLines=False, ShowTransformImg=False, ShowTemplateMatch=False):
         # template match to get a portion of the background
-        path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template.PNG"
-        template = cv2.imread(path)
+        template = cv2.imread('AspectRatioTemplate.png')
 
         rot_mouse = self.rotate_image_45(self.cur_frame)
-        target = self.template_match(rot_mouse,template,ShowMatches=ShowTemplateMatch) # find and return square of the background of the current image
-
+        target = self.template_match(rot_mouse, template, ShowMatches=ShowTemplateMatch)  # find and return square of the background of the current image
 
         # calc avg distance between squares of the background
         template_dist = self.dist_between_squares(template, ShowLines, imgName="template")
@@ -722,6 +719,9 @@ class image_process_algo_master:
     def get_rectangle(self):
         yolov5_detection = self.yolo.run(self.cur_frame)
         self.wound_rect = None if yolov5_detection is None else [[yolov5_detection['x0'], yolov5_detection['y0']], [yolov5_detection['x1'], yolov5_detection['y1']]]
+        if self.wound_rect is None:
+            print("YOLO Could not find wound in the given frame!")
+            exit(-1)
 
     def cut_frame_by_wound(self,bounding_r=None):  # bounding_r: the radius that was used in the last iteration
         # cut current frame by wound rect: take the yolo output and make a square with added background, then cut
@@ -756,32 +756,32 @@ class image_process_algo_master:
         cv2.destroyAllWindows()
         return circle_r, wound_area
 
-    def get_wound_segmentation(self, mouse_full_name=None, day=None):
-        path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/bounding circle exp/day0.jpg"
-
-        pics = self.dataset.get_pic_with_tag(mouse_full_name,day)
-        if pics is None: return
+    def get_wound_segmentation(self, mouse_full_name, day):
+        pics = self.dataset.get_pic_with_tag(mouse_full_name, day)
+        if pics is None:
+            print("Could not get pictures out of dataset!")
+            exit(-1)
         pics = pics.pictures
         frame = cv2.imread(pics[1])
 
-        # preper data for frame segmentation
+        # prepare data for frame segmentation
         self.cur_frame = frame
         self.cur_mouse_name = mouse_full_name
         self.cur_day = day
-        self.get_normaliz_factor(ShowLines=True, ShowTransformImg=True, ShowTemplateMatch=False)
+        self.get_normaliz_factor(ShowLines=False, ShowTransformImg=False, ShowTemplateMatch=False)
         last_bound_circle_r = self.get_last_bounding_radius()
         last_wound_area = self.get_last_wound_area()
         wound_area = None
 
         # start segmentation algorithm
         self.get_rectangle()
-        if self.wound_rect is None:
-            return
+
         while wound_area is None or wound_area > last_wound_area:
-            self.cut_frame_by_wound(bounding_r=last_bound_circle_r) # bounding_r: the radius that was used in the last iteration
+            self.cut_frame_by_wound(bounding_r=last_bound_circle_r)  # bounding_r: the radius that was used in the last iteration
             bound_circle_r, wound_area = self.segment_wound()
             last_bound_circle_r = int(self.last_bounding_radius * 0.9)  # decries radius for next iteration
-            if last_wound_area is None: break
+            if last_wound_area is None:
+                break
         self.cur_bounding_radius = bound_circle_r
         self.cur_wound_area = wound_area
 
