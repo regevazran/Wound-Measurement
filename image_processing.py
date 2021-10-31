@@ -1,23 +1,23 @@
+from skimage.transform import (hough_line, hough_line_peaks)
+from yolo.yolov5_executor import YoloAlgo
+from scipy.spatial import distance
+from scipy import interpolate
+import matplotlib.pyplot as plt
+from yolo.yolo_demo import *
+import matplotlib
+import imutils
+import random
+import pandas as pd
 import math
+from sklearn.feature_extraction import image
+from sklearn.cluster import spectral_clustering
+from find_wound_playGround import find_squares
+import pixellib
+# from find_wound_playGround import *
 from PIL import Image
 import cv2
 import numpy as np
-from scipy.spatial import distance
-from sklearn.feature_extraction import image
-from sklearn.cluster import spectral_clustering
-from yolo.yolo_demo import *
-from find_wound_playGround import find_squares
-from yolo.yolov5_executor import YoloAlgo
-import pixellib
-from skimage.transform import (hough_line, hough_line_peaks)
-import random
-from scipy import interpolate
-# from find_wound_playGround import *
-import matplotlib
-import imutils
-import matplotlib.pyplot as plt
 matplotlib.use('TkAgg')
-
 
 
 class image_process_algo_master:
@@ -518,6 +518,7 @@ class image_process_algo_master:
             cv2.imshow(title, img2)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
+
         def find_best(locations):
             best = locations[0]
             best_count = 1
@@ -543,7 +544,8 @@ class image_process_algo_master:
             else:
                 location = max_loc
             locations.append(location)
-            if ShowMatches: show_match(location,str(method))
+            if ShowMatches:
+                show_match(location,str(method))
         best_match = find_best(locations)
         if ShowMatches:
             img2 = img.copy()
@@ -597,14 +599,22 @@ class image_process_algo_master:
             return pic.algo_size_in_pixels/self.normaliz_factor
 
     def get_last_bounding_radius(self):
-        if self.normaliz_factor is None: return None
+        if self.normaliz_factor is None:
+            print("normalize factor is None")
+            return None
         last_day = self.dataset.get_last_day(self.cur_mouse_name,self.cur_day)
-        if last_day == None: return None
+        if last_day is None:
+            print('last day is None')
+            return None
         pic = self.dataset.get_pic_with_tag(self.cur_mouse_name, last_day)
         if pic is None:
+            print("pic is None")
             return None
         else:
-            return pic.min_bounding_radius_in_pixels/self.normaliz_factor
+            if pd.notna(pic.min_bounding_radius_in_pixels):
+                return pic.min_bounding_radius_in_pixels/self.normaliz_factor
+            else:
+                return None
 
     def find_min_bounding_circle(self, contour,img=None,display=False):
         (x,y), r = cv2.minEnclosingCircle(contour)
@@ -700,15 +710,15 @@ class image_process_algo_master:
 
         return img, img_before_segment, mask2
 
-    def set_square_from_yolo_output(self,bounding_r=None):  # bounding_r: the radius that was used in the last iteration
+    def set_square_from_yolo_output(self, bounding_r=None):  # bounding_r: the radius that was used in the last iteration
         old_rect_width = self.wound_rect[1][0]-self.wound_rect[0][0]
         old_rect_hight = self.wound_rect[1][1]-self.wound_rect[0][1]
         rect_center = (self.wound_rect[0][0]+int(old_rect_width/2),self.wound_rect[0][1]+int(old_rect_hight/2))
 
-        if bounding_r:
-            new_rect_size = bounding_r*2
-        else:
-            new_rect_size = max(old_rect_width,old_rect_hight)
+        new_rect_size = bounding_r*2 if bounding_r else max(old_rect_width, old_rect_hight)
+
+        print(new_rect_size)
+
         new_rect = [[rect_center[0] - int(new_rect_size/2),rect_center[1]- int(new_rect_size/2)],[rect_center[0] + int(new_rect_size/2),rect_center[1] + int(new_rect_size/2)]]
         # set the min square that contain the wound as the new wound rect
         self.wound_rect = new_rect
@@ -726,6 +736,7 @@ class image_process_algo_master:
     def cut_frame_by_wound(self,bounding_r=None):  # bounding_r: the radius that was used in the last iteration
         # cut current frame by wound rect: take the yolo output and make a square with added background, then cut
         bg_percent = 0.3
+        print(f"got bounding r: {bounding_r}")
         self.set_square_from_yolo_output(bounding_r)
         bg_pixel_to_add = int(bg_percent*self.wound_rect_size)
         self.only_wound = self.cur_frame[-bg_pixel_to_add + self.wound_rect[0][1]:self.wound_rect[1][1] + bg_pixel_to_add, -bg_pixel_to_add + self.wound_rect[0][0]:self.wound_rect[1][0] + bg_pixel_to_add]
@@ -770,6 +781,7 @@ class image_process_algo_master:
         self.cur_day = day
         self.get_normaliz_factor(ShowLines=False, ShowTransformImg=False, ShowTemplateMatch=False)
         last_bound_circle_r = self.get_last_bounding_radius()
+        print(f"got last bound circle r : {last_bound_circle_r}")
         last_wound_area = self.get_last_wound_area()
         wound_area = None
 

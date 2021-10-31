@@ -262,6 +262,7 @@ class DataSet:
     def get_pic_with_tag(self, mouse_name, day):
         pic = Picture()
         day = str(day)
+        day = day.replace("-", "") if "-" in day else day
         mice_names = self.dataset['Mouse'].tolist()
         if mouse_name not in mice_names:
             print("get_pic_with_tag: mouse name:",mouse_name," was not found in data set")
