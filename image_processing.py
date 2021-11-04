@@ -1,23 +1,27 @@
-from skimage.transform import (hough_line, hough_line_peaks)
-from yolo.yolov5_executor import YoloAlgo
-from scipy.spatial import distance
-from scipy import interpolate
-import matplotlib.pyplot as plt
-from yolo.yolo_demo import *
-import matplotlib
-import imutils
-import random
-import pandas as pd
 import math
-from sklearn.feature_extraction import image
-from sklearn.cluster import spectral_clustering
-from find_wound_playGround import find_squares
-import pixellib
-# from find_wound_playGround import *
+
+import scipy.signal
 from PIL import Image
 import cv2
 import numpy as np
+from scipy.spatial import distance
+from scipy.signal import convolve2d
+from scipy.ndimage import convolve
+from sklearn.feature_extraction import image
+from sklearn.cluster import spectral_clustering
+from yolo.yolo_demo import *
+from find_wound_playGround import find_squares
+from yolo.yolov5_executor import YoloAlgo
+import pixellib
+from skimage.transform import (hough_line, hough_line_peaks)
+import random
+from scipy import interpolate
+from find_wound_playGround import canny_with_trackbar
+import matplotlib
+import imutils
+import matplotlib.pyplot as plt
 matplotlib.use('TkAgg')
+
 
 
 class image_process_algo_master:
@@ -92,9 +96,8 @@ class image_process_algo_master:
         cv2.destroyAllWindows()
     def find_straight_lines(self, image):
         if len(image.shape) != 2: image = cv2.cvtColor(image,cv2.COLOR_BGR2GRAY)
-
         image = cv2.equalizeHist(image)
-        from find_wound_playGround import canny_with_trackbar
+        # image = ~image
 
         # Set a precision of 1 degree. (Divide into 180 data points)
         # You can increase the number of points if needed.
@@ -125,10 +128,12 @@ class image_process_algo_master:
 
         origin = np.array((0, image.shape[1]))
 
-        for _, angle, dist in zip(*hough_line_peaks(hspace, theta, dist,num_peaks=20)):
+        for _, angle, dist in zip(*hough_line_peaks(hspace, theta, dist)):
             angle_list.append(angle)  # Not for plotting but later calculation of angles
-            y0, y1 = (dist - origin * np.cos(angle)) / np.sin(angle)
-            ax[2].plot(origin, (y0, y1), '-r')
+            a = angle * 180 / np.pi
+            if ((a < 95) & (a > 85)):
+                y0, y1 = (dist - origin * np.cos(angle)) / np.sin(angle)
+                ax[2].plot(origin, (y0, y1), '-r')
         ax[2].set_xlim(origin)
         ax[2].set_ylim((image.shape[0], 0))
         ax[2].set_axis_off()
@@ -180,7 +185,7 @@ class image_process_algo_master:
         #
         # plt.show()
         return image
-    def find_normaliz_factor_old(self,template,target,ShowMatches=False,ShowTransformImg=False):
+    def find_normaliz_factor_older(self,template,target,ShowMatches=False,ShowTransformImg=False):
         if len(template.shape) != 2: template = cv2.cvtColor(template,cv2.COLOR_BGR2GRAY)
         if len(target.shape) != 2: target = cv2.cvtColor(target,cv2.COLOR_BGR2GRAY)
         # template = self.img_color_equalize(template)
@@ -189,7 +194,7 @@ class image_process_algo_master:
         template = cv2.equalizeHist(template)
         target = cv2.equalizeHist(target)
 
-        p1,p2 = self.getPointsSift(template, target, ShowMatches=ShowMatches)
+        p1,p2 = self.getPointsSift(template, target, ShowMatches=ShowMatches,R=0.7)
         normalize_factor = self.get_avg_dist_ratio(p1,p2)
 
         # -----------------try with warp matrix -----------------------
@@ -211,6 +216,93 @@ class image_process_algo_master:
         self.normaliz_factor = normalize_factor
 
         return
+    def get_normaliz_factor_old(self, ShowLines=False, ShowTransformImg=False, ShowTemplateMatch=False):
+        # template match to get a portion of the background
+        path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template.png"
+        template = cv2.imread(path)
+        rot_mouse = self.rotate_image(self.cur_frame,45)
+        target = self.template_match(rot_mouse,template,ShowMatches=ShowTemplateMatch) # find and return square of the background of the current image
+
+        # ---------------exp with backgraound---------------------
+        path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/background2.jpeg"
+        template = cv2.imread(path)
+        template = self.rotate_image(template,90)
+        factor = 0.4
+        target = cv2.resize(self.cur_frame, (int(self.cur_frame.shape[1] * factor), int(self.cur_frame.shape[0] * factor)))
+        norm_fact = self.find_normaliz_factor_older(template,target , ShowMatches=True, ShowTransformImg=True)
+        # exit(0)
+        # --------------------------------------------------------
+
+        # calc avg distance between squares of the background
+        template_dist = self.dist_between_squares(template, ShowLines, imgName="template")
+        print("template dist", template_dist)
+        target_dist = self.dist_between_squares(target, ShowLines, imgName="target")
+
+        # calc normalize factor between target and template
+        normalize_factor = template_dist/target_dist
+
+        if ShowTransformImg:
+            print("get_normaliz_factor: normalize_factor=",normalize_factor)
+            target_warp = cv2.resize(target,(int(target.shape[1] * normalize_factor), int(target.shape[0] * normalize_factor)))
+            cv2.imshow("warp image",target_warp)
+            cv2.imshow("target",target)
+            cv2.imshow("template",template)
+            cv2.waitKey(0)
+        self.normaliz_factor = normalize_factor
+        return
+    def exp_with_energy(self):
+        # template match to get a portion of the background
+        path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/background2.jpeg"
+        template = cv2.imread(path)
+        # ----------cutting out the mouse to get background--------------
+        mouse, maskBin, mouse_area = self.cut_mouse(self.cur_frame)
+        frame_gray = cv2.cvtColor(self.cur_frame,cv2.COLOR_BGR2GRAY)
+        tresh = cv2.adaptiveThreshold(frame_gray, 255, cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY, 15, -2)
+        only_bg_tresh = tresh * (~maskBin)
+        only_bg_tresh_rot = self.rotate_image(only_bg_tresh, 45)
+
+        # self.find_straight_lines(only_bg_tresh_rot[:temp,:])
+        # ---------------------------------------------------------------
+
+        # ------------cutting out a rectangle with max energy---------------
+        only_bg_gray = frame_gray * (~maskBin)
+        only_bg_gray_rot = self.rotate_image(only_bg_gray, 45)
+        rect_size = int(math.sqrt(mouse_area/7))
+        bg_rect = self.find_max_energy_rect(only_bg_gray_rot,[rect_size,rect_size])
+        bg_rect_gray = bg_rect.copy()
+        if len(bg_rect_gray.shape) != 2: bg_rect_gray = cv2.cvtColor(bg_rect_gray, cv2.COLOR_BGR2GRAY)
+        # ---------------------------------------------------------------
+        # template match
+        self.scale_template_match(bg_rect_gray,tresh=0.6)
+
+        #----------------------------------- Canny -------------------------------------------------
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        bg_rect_gray_blur = cv2.blur(bg_rect_gray,(9,9))
+        bg_rect_H = cv2.cvtColor(bg_rect,cv2.COLOR_BGR2HSV)[:,:,0]
+        cv2.imshow("bg_rect_H", bg_rect_H)
+        bg_rect_S = cv2.cvtColor(bg_rect,cv2.COLOR_BGR2HSV)[:,:,1]
+        cv2.imshow("bg_rect_S", bg_rect_S)
+        bg_rect_V = cv2.cvtColor(bg_rect,cv2.COLOR_BGR2HSV)[:,:,2]
+        cv2.imshow("bg_rect_V", bg_rect_V)
+        bg_rect_H_blur = cv2.blur(bg_rect_V, (3, 3))
+        bg_rect_gray_eq = cv2.equalizeHist(bg_rect_gray)
+        bg_rect_tresh_eq = cv2.adaptiveThreshold(bg_rect_gray_eq, 255, cv2.ADAPTIVE_THRESH_MEAN_C,cv2.THRESH_BINARY, 15, -2)
+        # cv2.imshow("bg equaliz",bg_rect_gray_eq)
+        # cv2.imshow("bg_rect_tresh_eq",bg_rect_tresh_eq)
+        # cv2.imshow("bg_rect_gray_eq",bg_rect_gray_eq)
+        # canny = canny_with_trackbar(bg_rect_gray_eq)
+
+        # canny_rect = cv2.Canny(bg_rect_H_blur, 0, 3, 3)
+        # cv2.imshow("bg_rect_H", bg_rect_H_blur)
+
+        # lines =cv2.HoughLinesP(canny_rect,1,np.pi/180,10)
+        # print(lines[0][0])
+        # cv2.line(bg_rect,(lines[0][0][0],lines[0][0][1]),(lines[0][0][2],lines[0][0][3]),(0,255,0),5)
+        # cv2.imshow("lines",bg_rect)
+        #--------------------------------------------------------------------------------------------------
+        return
+        # self.dist_between_squares(bg_rect, ShowLines=True, imgName="target")
+        self.find_straight_lines(bg_rect_tresh)
     def find_horz_and_vert_lines(self,img):
 
         # Transform source image to gray if it is not already
@@ -262,6 +354,75 @@ class image_process_algo_master:
         # cv2.imshow("vertical", vertical)
         # cv2.waitKey(0)
         return
+    def segment_using_hsv_thresh(self,img):
+        image_hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
+        H = image_hsv[:, :, 0]
+        S = image_hsv[:, :, 1]
+        V = image_hsv[:, :, 2]
+
+        mask = np.zeros(image_hsv.shape[:2], np.uint8)
+        maskIndex = np.where( (45 > H) & (25 > S))
+        mask[maskIndex] = 255
+        maskBin = (np.array(mask) > 0)
+
+        mask_dilate = ~cv2.dilate(~mask, (5,5), iterations=20)
+        maskBin_dilate = (np.array(mask_dilate) > 0)
+
+        masked_img = img * maskBin[:, :, np.newaxis]
+        cv2.imshow("img",img)
+        cv2.imshow("mask",mask)
+        cv2.imshow("mask_dilate",mask_dilate)
+        cv2.waitKey(0)
+        return masked_img, maskBin, maskBin_dilate
+    def get_histogram(self, image):
+        """
+         * Python program to create a color histogram.
+         *
+         * Usage: python ColorHistogram.py <filename>
+        """
+        import sys
+        import skimage.io
+        from matplotlib import pyplot as plt
+
+        # read original image, in full color, based on command
+        # line argument
+        image = np.array(image)
+        rgb_frame = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        hsv_frame = cv2.cvtColor(image, cv2.COLOR_BGR2HSV)
+        cv2.imshow("hsv image", hsv_frame)
+        cv2.imshow("rgb image", rgb_frame)
+        # tuple to select colors of each channel line
+        colors = ("red", "green", "blue")
+        channel_ids = (0, 1, 2)
+
+        # create the histogram plot, with three lines, one for
+        # each color
+        plt.xlim([0, 256])
+        for channel_id, c in zip(channel_ids, colors):
+            histogram, bin_edges = np.histogram(
+                hsv_frame[:, :, channel_id], bins=256, range=(0, 256)
+            )
+            plt.plot(bin_edges[0:-1], histogram, color=c)
+
+        plt.xlabel("Color value")
+        plt.ylabel("Pixels")
+
+        plt.show()
+        key = cv2.waitKey(0)
+    def img_color_equalize(self,img):
+        # convert from RGB color-space to YCrCb
+        ycrcb_img = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+
+        # equalize the histogram of the Y channel
+        ycrcb_img[:, :, 0] = cv2.equalizeHist(ycrcb_img[:, :, 0])
+
+        # convert back to RGB color-space from YCrCb
+        equalized_img = cv2.cvtColor(ycrcb_img, cv2.COLOR_YCrCb2BGR)
+
+        # cv2.imshow('Color input image', img)
+        # cv2.imshow('Histogram equalized', img_output)
+        # cv2.waitKey(0)
+        return equalized_img
 
     # ---------------warp image (not in use)------------------ #
     def corrMat(self,p1, p2):
@@ -416,7 +577,7 @@ class image_process_algo_master:
 
         p1, p2 = np.array(p1), np.array(p2)
         return p1, p2
-    def getPointsSift(self,im1, im2, ShowMatches=False):
+    def getPointsSift(self,im1, im2, ShowMatches=False, R=0.4):
         im1 = cv2.cvtColor(im1, cv2.COLOR_RGB2BGR)
         im2 = cv2.cvtColor(im2, cv2.COLOR_RGB2BGR)
         sift = cv2.SIFT_create()
@@ -425,12 +586,117 @@ class image_process_algo_master:
         bf = cv2.BFMatcher()
         matches = bf.knnMatch(des1, des2, k=2)
         print("getPointsSift: num of matches is: ",len(matches))
-        R = 0.4
         p1, p2 = self.filterOutBadMatches(im1, im2, kp1, kp2, matches, R, ShowMatches)
         print("getPointsSift: num of filterde matches is: ",len(p1))
         return p1, p2
 
     # ----------------- get normalization factor --------------------------
+    def get_contours(self, pic):
+        blur = cv2.GaussianBlur(pic, (5, 5), 0)
+        _, thresh_pic = cv2.threshold(blur, 80, 255, cv2.THRESH_BINARY_INV)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
+        close = cv2.morphologyEx(thresh_pic, cv2.MORPH_CLOSE, kernel, iterations=5)
+        close[close.shape[0]-20:close.shape[0]-1] = 0
+        contours, _ = cv2.findContours(close, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        return contours
+
+    def cut_mouse(self, pic):
+        # find mouse contour
+        gray_pic = cv2.cvtColor(pic, cv2.COLOR_BGR2GRAY)
+        orig_contours = self.get_contours(gray_pic)
+        center_contour = []
+        center_contour.append(self.find_center_contour(orig_contours, pic=pic))
+
+        # cut out the mouse
+        pic_copy = pic.copy()
+
+        mask = np.zeros(pic_copy.shape, np.uint8)
+        cv2.drawContours(mask, center_contour,-1, (0,255,0), thickness=-1)
+        mask = cv2.cvtColor(mask, cv2.COLOR_BGR2GRAY)
+        # close the contour of the mouse
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (7, 7))
+        close = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel, iterations=5)
+        mouse_contours, _ = cv2.findContours(close, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        mouse_area = cv2.contourArea(mouse_contours[0])
+
+        mouse = pic.copy()
+        cv2.drawContours(mouse, mouse_contours, -1, (0, 0, 255), thickness=-1)
+
+        # create mask
+        mask = np.zeros(pic.shape, np.uint8)
+        cv2.drawContours(mask, mouse_contours,-1, (0,0,255), thickness=-1)
+        mask = cv2.cvtColor(mask,cv2.COLOR_BGR2GRAY)
+        mouse_gray_dilate = cv2.dilate(mask,kernel, iterations=10)
+        mask_out = (np.array(mouse_gray_dilate) > 0)
+
+        return mouse , mask_out, mouse_area
+
+    def find_max_energy_rect(self,frame,rect_size,ShowBgRect=False):
+        color_frame = self.rotate_image(self.cur_frame,45)
+        frame_gray = frame.copy()
+        if len(frame_gray.shape) != 2: frame_gray = cv2.cvtColor(frame_gray, cv2.COLOR_BGR2GRAY)
+        kernal = (rect_size[0],rect_size[1])
+        conv_output = cv2.blur(frame_gray,kernal)
+        conv_output = conv_output[int(rect_size[0]/2):frame_gray.shape[0]-int(rect_size[0]/2),int(rect_size[1]/2):frame_gray.shape[1]-int(rect_size[1]/2)]
+        minVal, maxVal, minLoc, maxLoc = cv2.minMaxLoc(conv_output)
+        rect_corner = [maxLoc[0],maxLoc[1]]
+        max_rect = frame[rect_corner[1]:rect_corner[1]+rect_size[0],rect_corner[0]:rect_corner[0]+rect_size[0]]
+        max_rect_color = color_frame[rect_corner[1]:rect_corner[1]+rect_size[0],rect_corner[0]:rect_corner[0]+rect_size[0]]
+
+        if ShowBgRect:
+            frame_with_rect = frame_gray.copy()
+            cv2.rectangle(frame_with_rect, rect_corner, (rect_corner[0] + rect_size[0], rect_corner[1] + rect_size[1]), (0, 0, 255), 2)
+            cv2.imshow("frame with rect",frame_with_rect)
+            cv2.imshow("max energy rect",max_rect_color)
+
+        return max_rect_color
+
+    def scale_template_match(self,image, tresh=0.7, ShowMatch=False):
+        def prep_templates():
+            template0 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller0.png")
+            template1 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller1.png")
+            template3 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller3.png")
+            templates = [template0, template1, template3]
+            for i in range(0,len(templates)): templates[i] = cv2.equalizeHist(cv2.cvtColor(templates[i], cv2.COLOR_BGR2GRAY))
+            return templates
+        def show_match(match):
+            val, loc, w, h = match
+            img2 = image.copy()
+            bottom_right = (loc[0] + w, loc[1] + h)
+            cv2.rectangle(img2, loc, bottom_right, 0, 5)
+            cv2.imshow("match", img2)
+            print("sale_template_match: confidence=",val,"w=",w)
+
+        templates = prep_templates()
+        print("start template match")
+        image_gray = image.copy()
+        if len(image_gray.shape) != 2: image_gray = cv2.cvtColor(image_gray, cv2.COLOR_BGR2GRAY)
+        image_gray = cv2.equalizeHist(image_gray)
+
+        best_match = [0, None, None]
+        for template in templates:
+            matches = []
+            for scale in np.linspace(0.3, 2, 30)[::-1]:
+                w = int(template.shape[1] * scale)
+                h = int(template.shape[0] * scale)
+                resized = cv2.resize(template, (w,h))
+                if resized.shape[0] <= image.shape[0] and resized.shape[1] <= image.shape[1]:
+                    res = cv2.matchTemplate(image_gray, resized, cv2.TM_CCOEFF_NORMED)
+                    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(res)
+                    if(max_val >= tresh):
+                        match = [max_val,max_loc,w,h]
+                        matches.append(match)
+
+            for match in matches:
+                if match[0] > best_match[0]: best_match = match
+        print("finished template match")
+        if best_match[0] > 0:
+            if ShowMatch: show_match(best_match)
+            return best_match[2]*best_match[3]  # square area
+        else:
+            print("no match found")
+            return None
+
     def dist_between_squares(self, img, ShowLines=False, imgName="template"):  # FIXME not good enough
         lines_position = self.find_horz_lines(img)
         lines_position.sort()
@@ -443,6 +709,7 @@ class image_process_algo_master:
             for line in lines_position: img[line] = 0
             print("dist_between_squares: dist1=",dist1,"dist2=", dist2)
             print("dist_between_squares: avg dist=",avg_dist)
+            print("rect height",img.shape[0])
 
             cv2.imshow(imgName,img)
             cv2.waitKey(0)
@@ -474,24 +741,9 @@ class image_process_algo_master:
 
         return lines_idx
 
-    def rotate_image_45(self, image):
-        rotated = imutils.rotate_bound(image, 45)
+    def rotate_image(self, image,degrees):
+        rotated = imutils.rotate_bound(image, degrees)
         return rotated
-
-    def img_color_equalize(self,img):
-        # convert from RGB color-space to YCrCb
-        ycrcb_img = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
-
-        # equalize the histogram of the Y channel
-        ycrcb_img[:, :, 0] = cv2.equalizeHist(ycrcb_img[:, :, 0])
-
-        # convert back to RGB color-space from YCrCb
-        equalized_img = cv2.cvtColor(ycrcb_img, cv2.COLOR_YCrCb2BGR)
-
-        # cv2.imshow('Color input image', img)
-        # cv2.imshow('Histogram equalized', img_output)
-        # cv2.waitKey(0)
-        return equalized_img
 
     def get_avg_dist_ratio(self, bestp1, bestp2):
         def calc_dist(p1, p2):
@@ -518,7 +770,6 @@ class image_process_algo_master:
             cv2.imshow(title, img2)
             cv2.waitKey(0)
             cv2.destroyAllWindows()
-
         def find_best(locations):
             best = locations[0]
             best_count = 1
@@ -532,6 +783,7 @@ class image_process_algo_master:
             return best
         print("start template match")
 
+
         h, w = template.shape[0], template.shape[1]
         methods = [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED, cv2.TM_CCOEFF_NORMED, cv2.TM_CCOEFF, cv2.TM_CCORR_NORMED, cv2.TM_CCORR]
         locations = []
@@ -544,8 +796,7 @@ class image_process_algo_master:
             else:
                 location = max_loc
             locations.append(location)
-            if ShowMatches:
-                show_match(location,str(method))
+            if ShowMatches: show_match(location,str(method))
         best_match = find_best(locations)
         if ShowMatches:
             img2 = img.copy()
@@ -553,29 +804,41 @@ class image_process_algo_master:
         print("finished template match")
         return img[best_match[1]:best_match[1] + w, best_match[0]:best_match[0]+ h]
 
-    def get_normaliz_factor(self, ShowLines=False, ShowTransformImg=False, ShowTemplateMatch=False):
-        # template match to get a portion of the background
-        template = cv2.imread('AspectRatioTemplate.png')
+    def get_normaliz_factor(self,ShowBgRect=False, ShowTemplateMatch=False, ShowTransformImg=False):
+        # ----------cutting out the mouse to get background--------------
+        mouse, maskBin, mouse_area = self.cut_mouse(self.cur_frame)
+        frame_gray = cv2.cvtColor(self.cur_frame,cv2.COLOR_BGR2GRAY)
 
-        rot_mouse = self.rotate_image_45(self.cur_frame)
-        target = self.template_match(rot_mouse, template, ShowMatches=ShowTemplateMatch)  # find and return square of the background of the current image
-
-        # calc avg distance between squares of the background
-        template_dist = self.dist_between_squares(template, ShowLines, imgName="template")
-        target_dist = self.dist_between_squares(target, ShowLines, imgName="target")
-
-        # calc normalize factor between target and template
-        normalize_factor = template_dist/target_dist
-
+        # ------------cutting out a rectangle with max energy---------------
+        only_bg_gray = frame_gray * (~maskBin)
+        only_bg_gray_rot = self.rotate_image(only_bg_gray, 45)
+        rect_size = int(math.sqrt(mouse_area/7))
+        bg_rect = self.find_max_energy_rect(only_bg_gray_rot,[rect_size,rect_size], ShowBgRect)
+        bg_rect_gray = bg_rect.copy()
+        if len(bg_rect_gray.shape) != 2: bg_rect_gray = cv2.cvtColor(bg_rect_gray, cv2.COLOR_BGR2GRAY)
+        # ---------------------------------------------------------------
+        # template match
+        template = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller0.png")
+        template_area = template.shape[0]*template.shape[1]
+        template_dist = math.sqrt(template_area)
+        square_area = self.scale_template_match(bg_rect_gray,tresh=0.6, ShowMatch=ShowTemplateMatch)
+        if square_area is not None:
+            normalize_factor = template_dist/math.sqrt(square_area)
+            self.normaliz_factor = normalize_factor
+        else:
+            print("no normaliz factor found")
+            self.normaliz_factor = None
+            return False
         if ShowTransformImg:
             print("get_normaliz_factor: normalize_factor=",normalize_factor)
-            target_warp = cv2.resize(target,(int(target.shape[1] * normalize_factor), int(target.shape[0] * normalize_factor)))
+            target_warp = cv2.resize(bg_rect,(int(bg_rect.shape[1] * normalize_factor), int(bg_rect.shape[0] * normalize_factor)))
             cv2.imshow("warp image",target_warp)
-            cv2.imshow("target",target)
+            cv2.imshow("target",bg_rect)
             cv2.imshow("template",template)
+        if ShowBgRect or ShowTemplateMatch or ShowTransformImg:
             cv2.waitKey(0)
-        self.normaliz_factor = normalize_factor
-        return
+            cv2.destroyAllWindows()
+        return True
     # ---------------------------------------------------------------------
 
     def set_wound_area_in_dataset(self):  # FIXME need to test
@@ -599,22 +862,14 @@ class image_process_algo_master:
             return pic.algo_size_in_pixels/self.normaliz_factor
 
     def get_last_bounding_radius(self):
-        if self.normaliz_factor is None:
-            print("normalize factor is None")
-            return None
+        if self.normaliz_factor is None: return None
         last_day = self.dataset.get_last_day(self.cur_mouse_name,self.cur_day)
-        if last_day is None:
-            print('last day is None')
-            return None
+        if last_day == None: return None
         pic = self.dataset.get_pic_with_tag(self.cur_mouse_name, last_day)
         if pic is None:
-            print("pic is None")
             return None
         else:
-            if pd.notna(pic.min_bounding_radius_in_pixels):
-                return pic.min_bounding_radius_in_pixels/self.normaliz_factor
-            else:
-                return None
+            return pic.min_bounding_radius_in_pixels/self.normaliz_factor
 
     def find_min_bounding_circle(self, contour,img=None,display=False):
         (x,y), r = cv2.minEnclosingCircle(contour)
@@ -627,14 +882,15 @@ class image_process_algo_master:
             cv2.waitKey(0)
         return r
 
-    def find_center_contour(self, contours):    # function gets contour list and return the center contour out of the biggest three in the list
+    def find_center_contour(self, contours, pic=None):    # function gets contour list and return the center contour out of the biggest three in the list
 
         # take only the mouse contour
         contours.sort(reverse=True, key=cv2.contourArea)
         biggest_three = []
-
+        if pic is None: img = self.only_wound
+        else: img = pic
         # find center of image
-        image_center = (int(self.only_wound.shape[0]/2),int(self.only_wound.shape[1]/2))
+        image_center = (int(img.shape[0]/2),int(img.shape[1]/2))
         for i in range(0, 2):
             if (i < len(contours)):
                 # find center of each contour
@@ -710,15 +966,15 @@ class image_process_algo_master:
 
         return img, img_before_segment, mask2
 
-    def set_square_from_yolo_output(self, bounding_r=None):  # bounding_r: the radius that was used in the last iteration
+    def set_square_from_yolo_output(self,bounding_r=None):  # bounding_r: the radius that was used in the last iteration
         old_rect_width = self.wound_rect[1][0]-self.wound_rect[0][0]
         old_rect_hight = self.wound_rect[1][1]-self.wound_rect[0][1]
         rect_center = (self.wound_rect[0][0]+int(old_rect_width/2),self.wound_rect[0][1]+int(old_rect_hight/2))
 
-        new_rect_size = bounding_r*2 if bounding_r else max(old_rect_width, old_rect_hight)
-
-        print(new_rect_size)
-
+        if bounding_r:
+            new_rect_size = bounding_r*2
+        else:
+            new_rect_size = max(old_rect_width,old_rect_hight)
         new_rect = [[rect_center[0] - int(new_rect_size/2),rect_center[1]- int(new_rect_size/2)],[rect_center[0] + int(new_rect_size/2),rect_center[1] + int(new_rect_size/2)]]
         # set the min square that contain the wound as the new wound rect
         self.wound_rect = new_rect
@@ -729,14 +985,10 @@ class image_process_algo_master:
     def get_rectangle(self):
         yolov5_detection = self.yolo.run(self.cur_frame)
         self.wound_rect = None if yolov5_detection is None else [[yolov5_detection['x0'], yolov5_detection['y0']], [yolov5_detection['x1'], yolov5_detection['y1']]]
-        if self.wound_rect is None:
-            print("YOLO Could not find wound in the given frame!")
-            exit(-1)
 
     def cut_frame_by_wound(self,bounding_r=None):  # bounding_r: the radius that was used in the last iteration
         # cut current frame by wound rect: take the yolo output and make a square with added background, then cut
         bg_percent = 0.3
-        print(f"got bounding r: {bounding_r}")
         self.set_square_from_yolo_output(bounding_r)
         bg_pixel_to_add = int(bg_percent*self.wound_rect_size)
         self.only_wound = self.cur_frame[-bg_pixel_to_add + self.wound_rect[0][1]:self.wound_rect[1][1] + bg_pixel_to_add, -bg_pixel_to_add + self.wound_rect[0][0]:self.wound_rect[1][0] + bg_pixel_to_add]
@@ -767,36 +1019,37 @@ class image_process_algo_master:
         cv2.destroyAllWindows()
         return circle_r, wound_area
 
-    def get_wound_segmentation(self, mouse_full_name, day):
-        pics = self.dataset.get_pic_with_tag(mouse_full_name, day)
-        if pics is None:
-            print("Could not get pictures out of dataset!")
-            exit(-1)
+    def get_wound_segmentation(self, mouse_full_name=None, day=None):
+        path = "/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/bounding circle exp/day0.jpg"
+
+        pics = self.dataset.get_pic_with_tag(mouse_full_name,day)
+        if pics is None: return
         pics = pics.pictures
-        frame = cv2.imread(pics[1])
+        for pic in pics:
+            frame = cv2.imread(pic)
+            # preper data for frame segmentation
+            self.cur_frame = frame
+            self.cur_mouse_name = mouse_full_name
+            self.cur_day = day
+            if not self.get_normaliz_factor(ShowBgRect=True, ShowTransformImg=True, ShowTemplateMatch=True): return
 
-        # prepare data for frame segmentation
-        self.cur_frame = frame
-        self.cur_mouse_name = mouse_full_name
-        self.cur_day = day
-        self.get_normaliz_factor(ShowLines=False, ShowTransformImg=False, ShowTemplateMatch=False)
-        last_bound_circle_r = self.get_last_bounding_radius()
-        print(f"got last bound circle r : {last_bound_circle_r}")
-        last_wound_area = self.get_last_wound_area()
-        wound_area = None
 
-        # start segmentation algorithm
-        self.get_rectangle()
+            last_bound_circle_r = self.get_last_bounding_radius()
+            last_wound_area = self.get_last_wound_area()
+            wound_area = None
 
-        while wound_area is None or wound_area > last_wound_area:
-            self.cut_frame_by_wound(bounding_r=last_bound_circle_r)  # bounding_r: the radius that was used in the last iteration
-            bound_circle_r, wound_area = self.segment_wound()
-            last_bound_circle_r = int(self.last_bounding_radius * 0.9)  # decries radius for next iteration
-            if last_wound_area is None:
-                break
-        self.cur_bounding_radius = bound_circle_r
-        self.cur_wound_area = wound_area
+            # start segmentation algorithm
+            self.get_rectangle()
+            if self.wound_rect is None:
+                return
+            while wound_area is None or wound_area > last_wound_area:
+                self.cut_frame_by_wound(bounding_r=last_bound_circle_r) # bounding_r: the radius that was used in the last iteration
+                bound_circle_r, wound_area = self.segment_wound()
+                last_bound_circle_r = int(self.last_bounding_radius * 0.9)  # decries radius for next iteration
+                if last_wound_area is None: break
+            self.cur_bounding_radius = bound_circle_r
+            self.cur_wound_area = wound_area
 
-        self.set_wound_area_in_dataset()
-        self.set_bound_circle_r_in_dataset()
+            self.set_wound_area_in_dataset()
+            self.set_bound_circle_r_in_dataset()
 
