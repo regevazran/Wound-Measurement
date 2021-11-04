@@ -20,6 +20,8 @@ from find_wound_playGround import canny_with_trackbar
 import matplotlib
 import imutils
 import matplotlib.pyplot as plt
+import pandas as pd
+
 matplotlib.use('TkAgg')
 
 
@@ -423,6 +425,105 @@ class image_process_algo_master:
         # cv2.imshow('Histogram equalized', img_output)
         # cv2.waitKey(0)
         return equalized_img
+    def get_avg_dist_ratio(self, bestp1, bestp2):
+        def calc_dist(p1, p2):
+            return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
+
+        dist_list = []
+        for i in range(0,bestp1.shape[0]):
+            p1_1 = bestp1[i]
+            p2_1 = bestp2[i]
+            for j in range(i+1, bestp1.shape[0]):
+                p1_2 = bestp1[j]
+                p2_2 = bestp2[j]
+                dist_in_1 = calc_dist(p1_1,p1_2)
+                dist_in_2 = calc_dist(p2_1,p2_2)
+                if dist_in_1 == 0 or dist_in_2 == 0: continue
+                dist_list.append(dist_in_1/dist_in_2)   # save the ratio between the distances
+        avg_ratio = sum(dist_list) / len(dist_list)
+        return avg_ratio
+    def dist_between_squares(self, img, ShowLines=False, imgName="template"):  # FIXME not good enough
+        lines_position = self.find_horz_lines(img)
+        lines_position.sort()
+        dist1 = lines_position[2] - lines_position[1]
+        dist2 = lines_position[1] - lines_position[0]
+        if max(dist2,dist1)/min(dist2,dist1) > 1.2: avg_dist = max(dist1, dist2)
+        else: avg_dist = (dist1 + dist2)/2
+        if ShowLines:
+            if len(img.shape) != 2: img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+            for line in lines_position: img[line] = 0
+            print("dist_between_squares: dist1=",dist1,"dist2=", dist2)
+            print("dist_between_squares: avg dist=",avg_dist)
+            print("rect height",img.shape[0])
+
+            cv2.imshow(imgName,img)
+            cv2.waitKey(0)
+        return avg_dist
+    def find_horz_lines(self, img):
+
+        # Transform source image to gray if it is not already
+        if len(img.shape) != 2: img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+        # Apply adaptiveThreshold at the bitwise_not of gray, notice the ~ symbol
+        img_not = cv2.bitwise_not(img)
+        img = cv2.adaptiveThreshold(img_not, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2)
+
+        max_line_width = int(img.shape[0]*0.08)
+        sum_list = []
+        lines_idx = []
+        for line_num, line in enumerate(img):
+            Sum = sum(line)
+            sum_list.append(Sum)
+        for i in range(0,3):
+            max_value = max(sum_list)
+            max_index = sum_list.index(max_value)
+            lines_idx.append(max_index)
+            for i in range(0,max_line_width):
+                index_to_erase = max_index + int(max_line_width/2) - i
+                if index_to_erase >= 0 and index_to_erase < len(sum_list):
+                    sum_list[index_to_erase] = 0
+
+        return lines_idx
+    def template_match(self, img, template, ShowMatches=False):
+        def show_match(loc,title):
+            bottom_right = (loc[0] + w, loc[1] + h)
+            cv2.rectangle(img2, loc, bottom_right, 255, 5)
+            cv2.imshow(title, img2)
+            cv2.waitKey(0)
+            cv2.destroyAllWindows()
+        def find_best(locations):
+            best = locations[0]
+            best_count = 1
+            for i in range(0,len(locations)):
+                count = 1
+                for j in range(i+1, len(locations)):
+                    if locations[i][0] == locations[j][0] and locations[i][1] == locations[j][1]: count = count + 1
+                if count > best_count:
+                    best = locations[i]
+                    best_count = count
+            return best
+        print("start template match")
+
+
+        h, w = template.shape[0], template.shape[1]
+        methods = [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED, cv2.TM_CCOEFF_NORMED, cv2.TM_CCOEFF, cv2.TM_CCORR_NORMED, cv2.TM_CCORR]
+        locations = []
+        for method in methods:
+            img2 = img.copy()
+            result = cv2.matchTemplate(img2, template, method)
+            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+            if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
+                location = min_loc
+            else:
+                location = max_loc
+            locations.append(location)
+            if ShowMatches: show_match(location,str(method))
+        best_match = find_best(locations)
+        if ShowMatches:
+            img2 = img.copy()
+            show_match(best_match,"best")
+        print("finished template match")
+        return img[best_match[1]:best_match[1] + w, best_match[0]:best_match[0]+ h]
 
     # ---------------warp image (not in use)------------------ #
     def corrMat(self,p1, p2):
@@ -697,112 +798,9 @@ class image_process_algo_master:
             print("no match found")
             return None
 
-    def dist_between_squares(self, img, ShowLines=False, imgName="template"):  # FIXME not good enough
-        lines_position = self.find_horz_lines(img)
-        lines_position.sort()
-        dist1 = lines_position[2] - lines_position[1]
-        dist2 = lines_position[1] - lines_position[0]
-        if max(dist2,dist1)/min(dist2,dist1) > 1.2: avg_dist = max(dist1, dist2)
-        else: avg_dist = (dist1 + dist2)/2
-        if ShowLines:
-            if len(img.shape) != 2: img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            for line in lines_position: img[line] = 0
-            print("dist_between_squares: dist1=",dist1,"dist2=", dist2)
-            print("dist_between_squares: avg dist=",avg_dist)
-            print("rect height",img.shape[0])
-
-            cv2.imshow(imgName,img)
-            cv2.waitKey(0)
-        return avg_dist
-
-    def find_horz_lines(self, img):
-
-        # Transform source image to gray if it is not already
-        if len(img.shape) != 2: img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-        # Apply adaptiveThreshold at the bitwise_not of gray, notice the ~ symbol
-        img_not = cv2.bitwise_not(img)
-        img = cv2.adaptiveThreshold(img_not, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 15, -2)
-
-        max_line_width = int(img.shape[0]*0.08)
-        sum_list = []
-        lines_idx = []
-        for line_num, line in enumerate(img):
-            Sum = sum(line)
-            sum_list.append(Sum)
-        for i in range(0,3):
-            max_value = max(sum_list)
-            max_index = sum_list.index(max_value)
-            lines_idx.append(max_index)
-            for i in range(0,max_line_width):
-                index_to_erase = max_index + int(max_line_width/2) - i
-                if index_to_erase >= 0 and index_to_erase < len(sum_list):
-                    sum_list[index_to_erase] = 0
-
-        return lines_idx
-
     def rotate_image(self, image,degrees):
         rotated = imutils.rotate_bound(image, degrees)
         return rotated
-
-    def get_avg_dist_ratio(self, bestp1, bestp2):
-        def calc_dist(p1, p2):
-            return math.sqrt((p1[0] - p2[0]) ** 2 + (p1[1] - p2[1]) ** 2)
-
-        dist_list = []
-        for i in range(0,bestp1.shape[0]):
-            p1_1 = bestp1[i]
-            p2_1 = bestp2[i]
-            for j in range(i+1, bestp1.shape[0]):
-                p1_2 = bestp1[j]
-                p2_2 = bestp2[j]
-                dist_in_1 = calc_dist(p1_1,p1_2)
-                dist_in_2 = calc_dist(p2_1,p2_2)
-                if dist_in_1 == 0 or dist_in_2 == 0: continue
-                dist_list.append(dist_in_1/dist_in_2)   # save the ratio between the distances
-        avg_ratio = sum(dist_list) / len(dist_list)
-        return avg_ratio
-
-    def template_match(self, img, template, ShowMatches=False):
-        def show_match(loc,title):
-            bottom_right = (loc[0] + w, loc[1] + h)
-            cv2.rectangle(img2, loc, bottom_right, 255, 5)
-            cv2.imshow(title, img2)
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
-        def find_best(locations):
-            best = locations[0]
-            best_count = 1
-            for i in range(0,len(locations)):
-                count = 1
-                for j in range(i+1, len(locations)):
-                    if locations[i][0] == locations[j][0] and locations[i][1] == locations[j][1]: count = count + 1
-                if count > best_count:
-                    best = locations[i]
-                    best_count = count
-            return best
-        print("start template match")
-
-
-        h, w = template.shape[0], template.shape[1]
-        methods = [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED, cv2.TM_CCOEFF_NORMED, cv2.TM_CCOEFF, cv2.TM_CCORR_NORMED, cv2.TM_CCORR]
-        locations = []
-        for method in methods:
-            img2 = img.copy()
-            result = cv2.matchTemplate(img2, template, method)
-            min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-            if method in [cv2.TM_SQDIFF, cv2.TM_SQDIFF_NORMED]:
-                location = min_loc
-            else:
-                location = max_loc
-            locations.append(location)
-            if ShowMatches: show_match(location,str(method))
-        best_match = find_best(locations)
-        if ShowMatches:
-            img2 = img.copy()
-            show_match(best_match,"best")
-        print("finished template match")
-        return img[best_match[1]:best_match[1] + w, best_match[0]:best_match[0]+ h]
 
     def get_normaliz_factor(self,ShowBgRect=False, ShowTemplateMatch=False, ShowTransformImg=False):
         # ----------cutting out the mouse to get background--------------
@@ -820,10 +818,9 @@ class image_process_algo_master:
         # template match
         template = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller0.png")
         template_area = template.shape[0]*template.shape[1]
-        template_dist = math.sqrt(template_area)
         square_area = self.scale_template_match(bg_rect_gray,tresh=0.6, ShowMatch=ShowTemplateMatch)
         if square_area is not None:
-            normalize_factor = template_dist/math.sqrt(square_area)
+            normalize_factor = template_area/square_area
             self.normaliz_factor = normalize_factor
         else:
             print("no normaliz factor found")
@@ -843,11 +840,14 @@ class image_process_algo_master:
 
     def set_wound_area_in_dataset(self):  # FIXME need to test
         normalized_area = self.cur_wound_area*self.normaliz_factor
+        print("set_wound_area_in_dataset area to data set:",normalized_area)
         self.dataset.update_mouse_in_dataset(self.cur_mouse_name, self.cur_day, normalized_area, type="area")
         return
 
     def set_bound_circle_r_in_dataset(self): # FIXME need to test
         normalized_radius = self.cur_bounding_radius*self.normaliz_factor
+        print("set_bound_circle_r_in_dataset radius to data set:",normalized_radius)
+
         self.dataset.update_mouse_in_dataset(self.cur_mouse_name, self.cur_day, normalized_radius, type="radius")
         return
 
@@ -859,7 +859,12 @@ class image_process_algo_master:
         if pic is None:
             return None
         else:
-            return pic.algo_size_in_pixels/self.normaliz_factor
+            area = pic.algo_size_in_pixels
+            if pd.notna(area):
+                area = float(pic.algo_size_in_pixels.split()[1])
+                return area / self.normaliz_factor
+            else:
+                return None
 
     def get_last_bounding_radius(self):
         if self.normaliz_factor is None: return None
@@ -869,7 +874,12 @@ class image_process_algo_master:
         if pic is None:
             return None
         else:
-            return pic.min_bounding_radius_in_pixels/self.normaliz_factor
+            radius = pic.algo_size_in_pixels
+            if pd.notna(radius):
+                radius = float(pic.min_bounding_radius_in_pixels.split()[1])
+                return radius / self.normaliz_factor
+            else:
+                return None
 
     def find_min_bounding_circle(self, contour,img=None,display=False):
         (x,y), r = cv2.minEnclosingCircle(contour)
@@ -1015,7 +1025,7 @@ class image_process_algo_master:
         cv2.imshow("segmented wound",only_wound_to_show)
         cv2.waitKey(0)
         # prepare bounding radius for net image evaluation
-        circle_r = self.find_min_bounding_circle(center_contour, only_wound_to_show,display=True)
+        circle_r = self.find_min_bounding_circle(center_contour, only_wound_to_show,display=False)
         cv2.destroyAllWindows()
         return circle_r, wound_area
 
@@ -1031,10 +1041,10 @@ class image_process_algo_master:
             self.cur_frame = frame
             self.cur_mouse_name = mouse_full_name
             self.cur_day = day
-            if not self.get_normaliz_factor(ShowBgRect=True, ShowTransformImg=True, ShowTemplateMatch=True): return
-
-
+            if not self.get_normaliz_factor(ShowBgRect=False, ShowTransformImg=False, ShowTemplateMatch=True): return
+            print("normaliz factor",self.normaliz_factor)
             last_bound_circle_r = self.get_last_bounding_radius()
+            last_bound_circle_r = None
             last_wound_area = self.get_last_wound_area()
             wound_area = None
 
@@ -1043,6 +1053,7 @@ class image_process_algo_master:
             if self.wound_rect is None:
                 return
             while wound_area is None or wound_area > last_wound_area:
+                print("last wound area",last_wound_area)
                 self.cut_frame_by_wound(bounding_r=last_bound_circle_r) # bounding_r: the radius that was used in the last iteration
                 bound_circle_r, wound_area = self.segment_wound()
                 last_bound_circle_r = int(self.last_bounding_radius * 0.9)  # decries radius for next iteration
@@ -1052,4 +1063,6 @@ class image_process_algo_master:
 
             self.set_wound_area_in_dataset()
             self.set_bound_circle_r_in_dataset()
+            print(self.dataset.dataset.to_string())
+
 

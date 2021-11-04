@@ -254,10 +254,10 @@ class DataSet:
             mouse_index = self.dataset[self.dataset['Mouse'] == mouse_name].index.to_numpy()[0]
             data = self.dataset.at[mouse_index, 'algo_size_in_pixels_day' + str(last_day)]
             if pd.notna(data):
-                break
+                return last_day
             last_day = last_day - 1
-
-        return last_day
+        print("Cant get last day mouse status - no preliminary data found")
+        return None
 
     def get_pic_with_tag(self, mouse_name, day):
         pic = Picture()
@@ -310,14 +310,14 @@ class DataSet:
         # set new value
         if pd.notna(cur_dataset_value):
             cur_dataset_value = cur_dataset_value.split()
-            size = cur_dataset_value[1]
-            weight = cur_dataset_value[3]
+            size = float(cur_dataset_value[1])
+            weight = int(cur_dataset_value[3])
         else:
             size = 0
             weight = 0
 
+        size = (size*weight + data_value) / (weight+1)
         weight = weight + 1
-        size = (size + data_value) / (weight)
         new_dataset_value = str('avgSize: ') + str(size) + str(' weight: ') + str(weight)
 
         self.dataset.loc[mouse_index, data_type] = new_dataset_value
