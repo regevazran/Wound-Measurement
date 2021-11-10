@@ -748,7 +748,7 @@ class image_process_algo_master:
             frame_with_rect = frame_gray.copy()
             cv2.rectangle(frame_with_rect, rect_corner, (rect_corner[0] + rect_size[0], rect_corner[1] + rect_size[1]), (0, 0, 255), 2)
             cv2.imshow("frame with rect",frame_with_rect)
-            cv2.imshow("max energy rect",max_rect_color)
+            # cv2.imshow("max energy rect",max_rect_color)
 
         return max_rect_color
 
@@ -757,7 +757,8 @@ class image_process_algo_master:
             template0 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller0.png")
             template1 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller1.png")
             template3 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller3.png")
-            templates = [template0, template1, template3]
+            template4 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller32.png")
+            templates = [template0, template1, template3, template4]
             for i in range(0,len(templates)): templates[i] = cv2.equalizeHist(cv2.cvtColor(templates[i], cv2.COLOR_BGR2GRAY))
             return templates
         def show_match(match):
@@ -766,10 +767,10 @@ class image_process_algo_master:
             bottom_right = (loc[0] + w, loc[1] + h)
             cv2.rectangle(img2, loc, bottom_right, 0, 5)
             cv2.imshow("match", img2)
-            print("sale_template_match: confidence=",val,"w=",w)
+            print("scale_template_match: confidence=",val)
 
         templates = prep_templates()
-        print("start template match")
+        print("scale_template_match: start template match")
         image_gray = image.copy()
         if len(image_gray.shape) != 2: image_gray = cv2.cvtColor(image_gray, cv2.COLOR_BGR2GRAY)
         image_gray = cv2.equalizeHist(image_gray)
@@ -790,7 +791,6 @@ class image_process_algo_master:
 
             for match in matches:
                 if match[0] > best_match[0]: best_match = match
-        print("finished template match")
         if best_match[0] > 0:
             if ShowMatch: show_match(best_match)
             return best_match[2]*best_match[3]  # square area
@@ -821,14 +821,19 @@ class image_process_algo_master:
         square_area = self.scale_template_match(bg_rect_gray,tresh=0.6, ShowMatch=ShowTemplateMatch)
         if square_area is not None:
             normalize_factor = template_area/square_area
-            self.normaliz_factor = normalize_factor
+            if normalize_factor > 2 or normalize_factor < 0.3 :
+                print("get_normaliz_factor: factor is to big or to small:",normalize_factor)
+                self.normaliz_factor = None
+                return False
+            else: self.normaliz_factor = normalize_factor
         else:
-            print("no normaliz factor found")
+            print("get_normaliz_factor: no normaliz factor found")
             self.normaliz_factor = None
             return False
         if ShowTransformImg:
             print("get_normaliz_factor: normalize_factor=",normalize_factor)
-            target_warp = cv2.resize(bg_rect,(int(bg_rect.shape[1] * normalize_factor), int(bg_rect.shape[0] * normalize_factor)))
+            sqrt_factor =math.sqrt(normalize_factor)
+            target_warp = cv2.resize(bg_rect,(int(bg_rect.shape[1] * sqrt_factor), int(bg_rect.shape[0] * sqrt_factor)))
             cv2.imshow("warp image",target_warp)
             cv2.imshow("target",bg_rect)
             cv2.imshow("template",template)
@@ -838,15 +843,16 @@ class image_process_algo_master:
         return True
     # ---------------------------------------------------------------------
 
-    def set_wound_area_in_dataset(self):  # FIXME need to test
+    def set_wound_area_in_dataset(self):
         normalized_area = self.cur_wound_area*self.normaliz_factor
-        print("set_wound_area_in_dataset area to data set:",normalized_area)
+        print("set_wound_area_in_dataset- normalized factor was:",self.normaliz_factor)
+        print("set_wound_area_in_dataset- area to data set:",normalized_area)
         self.dataset.update_mouse_in_dataset(self.cur_mouse_name, self.cur_day, normalized_area, type="area")
         return
 
-    def set_bound_circle_r_in_dataset(self): # FIXME need to test
+    def set_bound_circle_r_in_dataset(self):
         normalized_radius = self.cur_bounding_radius*self.normaliz_factor
-        print("set_bound_circle_r_in_dataset radius to data set:",normalized_radius)
+        print("set_bound_circle_r_in_dataset- radius to data set:",normalized_radius)
 
         self.dataset.update_mouse_in_dataset(self.cur_mouse_name, self.cur_day, normalized_radius, type="radius")
         return
@@ -1041,8 +1047,8 @@ class image_process_algo_master:
             self.cur_frame = frame
             self.cur_mouse_name = mouse_full_name
             self.cur_day = day
-            if not self.get_normaliz_factor(ShowBgRect=False, ShowTransformImg=False, ShowTemplateMatch=True): return
-            print("normaliz factor",self.normaliz_factor)
+            if not self.get_normaliz_factor(ShowBgRect=True, ShowTransformImg=True, ShowTemplateMatch=True): continue
+            print("get_wound_segmentation: normaliz factor",self.normaliz_factor)
             last_bound_circle_r = self.get_last_bounding_radius()
             last_bound_circle_r = None
             last_wound_area = self.get_last_wound_area()
@@ -1053,7 +1059,7 @@ class image_process_algo_master:
             if self.wound_rect is None:
                 return
             while wound_area is None or wound_area > last_wound_area:
-                print("last wound area",last_wound_area)
+                print("get_wound_segmentation: last wound area =",last_wound_area)
                 self.cut_frame_by_wound(bounding_r=last_bound_circle_r) # bounding_r: the radius that was used in the last iteration
                 bound_circle_r, wound_area = self.segment_wound()
                 last_bound_circle_r = int(self.last_bounding_radius * 0.9)  # decries radius for next iteration
