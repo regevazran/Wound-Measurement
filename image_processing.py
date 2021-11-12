@@ -502,7 +502,7 @@ class image_process_algo_master:
                     best = locations[i]
                     best_count = count
             return best
-        print("start template match")
+        # print("start template match")
 
 
         h, w = template.shape[0], template.shape[1]
@@ -694,7 +694,7 @@ class image_process_algo_master:
     # ----------------- get normalization factor --------------------------
     def get_contours(self, pic):
         blur = cv2.GaussianBlur(pic, (5, 5), 0)
-        _, thresh_pic = cv2.threshold(blur, 80, 255, cv2.THRESH_BINARY_INV)
+        _, thresh_pic = cv2.threshold(blur, 120, 255, cv2.THRESH_BINARY_INV)
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (21, 21))
         close = cv2.morphologyEx(thresh_pic, cv2.MORPH_CLOSE, kernel, iterations=5)
         close[close.shape[0]-20:close.shape[0]-1] = 0
@@ -754,10 +754,10 @@ class image_process_algo_master:
 
     def scale_template_match(self,image, tresh=0.7, ShowMatch=False):
         def prep_templates():
-            template0 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller0.png")
-            template1 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller1.png")
-            template3 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller3.png")
-            template4 = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller32.png")
+            template0 = cv2.imread("templates/template0.png")
+            template1 = cv2.imread("templates/template1.png")
+            template3 = cv2.imread("templates/template3.png")
+            template4 = cv2.imread("templates/template4.png")
             templates = [template0, template1, template3, template4]
             for i in range(0,len(templates)): templates[i] = cv2.equalizeHist(cv2.cvtColor(templates[i], cv2.COLOR_BGR2GRAY))
             return templates
@@ -816,7 +816,7 @@ class image_process_algo_master:
         if len(bg_rect_gray.shape) != 2: bg_rect_gray = cv2.cvtColor(bg_rect_gray, cv2.COLOR_BGR2GRAY)
         # ---------------------------------------------------------------
         # template match
-        template = cv2.imread("/Users/regevazran1/Desktop/technion/semester i/project c/temp pic/template_smaller0.png")
+        template = cv2.imread("templates/template0.png")
         template_area = template.shape[0]*template.shape[1]
         square_area = self.scale_template_match(bg_rect_gray,tresh=0.6, ShowMatch=ShowTemplateMatch)
         if square_area is not None:
@@ -837,9 +837,9 @@ class image_process_algo_master:
             cv2.imshow("warp image",target_warp)
             cv2.imshow("target",bg_rect)
             cv2.imshow("template",template)
-        if ShowBgRect or ShowTemplateMatch or ShowTransformImg:
-            cv2.waitKey(0)
-            cv2.destroyAllWindows()
+        # if ShowBgRect or ShowTemplateMatch or ShowTransformImg:
+        #     cv2.waitKey(0)
+        #     cv2.destroyAllWindows()
         return True
     # ---------------------------------------------------------------------
 
@@ -995,8 +995,8 @@ class image_process_algo_master:
         # set the min square that contain the wound as the new wound rect
         self.wound_rect = new_rect
         self.wound_rect_size = new_rect_size
-        self.last_bounding_radius = bounding_r
-        print("set_square_from_yolo_output: use r= ",bounding_r)
+        self.last_bounding_radius = None
+        # print("set_square_from_yolo_output: use r= ",bounding_r)
 
     def get_rectangle(self):
         yolov5_detection = self.yolo.run(self.cur_frame)
@@ -1019,9 +1019,9 @@ class image_process_algo_master:
         closing = self.only_wound #FIXME delete!!!!
         # grab cut
         img_grab_cut, img_with_init_mask, wound_mask = self.grab_cut(closing, mode="mask") # mode options are "mask" or "rect"
-        cv2.imshow("img_grab_cut", img_grab_cut)
-        cv2.imshow("img_grab_cut wound with init mask", img_with_init_mask)
-        cv2.waitKey(0)
+        # cv2.imshow("img_grab_cut", img_grab_cut)
+        # cv2.imshow("img_grab_cut wound with init mask", img_with_init_mask)
+        # cv2.waitKey(0)
         contours, _ = cv2.findContours(wound_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
         center_contour = self.find_center_contour(contours)
         wound_area = cv2.contourArea(center_contour)
@@ -1043,13 +1043,13 @@ class image_process_algo_master:
         pics = pics.pictures
         for pic in pics:
             frame = cv2.imread(pic)
+            if frame is None: continue
             # preper data for frame segmentation
             self.cur_frame = frame
             self.cur_mouse_name = mouse_full_name
             self.cur_day = day
-            if not self.get_normaliz_factor(ShowBgRect=True, ShowTransformImg=True, ShowTemplateMatch=True): continue
+            if not self.get_normaliz_factor(ShowBgRect=False, ShowTransformImg=False, ShowTemplateMatch=True): continue
             print("get_wound_segmentation: normaliz factor",self.normaliz_factor)
-            last_bound_circle_r = self.get_last_bounding_radius()
             last_bound_circle_r = None
             last_wound_area = self.get_last_wound_area()
             wound_area = None
@@ -1058,17 +1058,17 @@ class image_process_algo_master:
             self.get_rectangle()
             if self.wound_rect is None:
                 return
-            while wound_area is None or wound_area > last_wound_area:
+            while wound_area is None:
                 print("get_wound_segmentation: last wound area =",last_wound_area)
                 self.cut_frame_by_wound(bounding_r=last_bound_circle_r) # bounding_r: the radius that was used in the last iteration
                 bound_circle_r, wound_area = self.segment_wound()
-                last_bound_circle_r = int(self.last_bounding_radius * 0.9)  # decries radius for next iteration
+                # last_bound_circle_r = int(self.last_bounding_radius * 0.9)  # decries radius for next iteration
                 if last_wound_area is None: break
             self.cur_bounding_radius = bound_circle_r
             self.cur_wound_area = wound_area
 
             self.set_wound_area_in_dataset()
-            self.set_bound_circle_r_in_dataset()
+            # self.set_bound_circle_r_in_dataset()
             print(self.dataset.dataset.to_string())
 
 
